@@ -10,7 +10,10 @@ import {isNewGoal} from '@/lib/planner';
 import {Workspace,WorkspaceSchema,PlanResult} from '@/lib/schema';
 const examples=[{icon:'◈',label:'Learn something deeply',prompt:'I have a biology exam in three days. Help me prepare.',tag:'LEARNING'},{icon:'▦',label:'Build a conflict-free week',prompt:"Organize next week’s shifts for six employees, including Daniel.",tag:'HERO · SCHEDULING'},{icon:'↗',label:'Go somewhere new',prompt:'Plan a five-day trip to Japan on a budget of 1200 dollars.',tag:'EXPLORING'},{icon:'⊞',label:'Make a better decision',prompt:'Compare three business opportunities using weighted criteria.',tag:'DECIDING'}];
 export default function Home(){const[demoId,setDemoId]=useState<string|null>(null);const demo=demoConversations.find(c=>c.id===demoId);const[workspaces,setWorkspaces]=useState<Workspace[]>([]);const[active,setActive]=useState<string|null>(null);const[prompt,setPrompt]=useState('');const[busy,setBusy]=useState(false);const[error,setError]=useState('');const[ready,setReady]=useState(false);const[explain,setExplain]=useState(false);const[dark,setDark]=useState(true);const[rtl,setRtl]=useState(false);const[mobileNav,setMobileNav]=useState(false);const[mode,setMode]=useState('demo');const[requestedMode,setRequestedMode]=useState<'demo'|'live'>('demo');const[logs,setLogs]=useState<string[]>([]);const[showLogs,setShowLogs]=useState(false);const [aiStatus,setAiStatus]=useState<{configured:boolean;storageReady:boolean;spent?:number;limit?:number;warning?:boolean}>();const [sources,setSources]=useState<Record<string,string>>({});const current=workspaces.find(w=>w.id===active);const[domainBusy,setDomainBusy]=useState(false);const[command,setCommand]=useState<{id:string;text:string}>();const planning=useRef(false);const activeRef=useRef(active);activeRef.current=active;
-useEffect(()=>{fetch('/api/plan',{cache:'no-store'}).then(r=>r.json()).then(setAiStatus).catch(()=>setAiStatus({configured:false,storageReady:false}));try{setSources(JSON.parse(localStorage.getItem('shadowui.sources')||'{}'))}catch{}},[]);
+const statusRequest=useRef<Promise<void>|null>(null);
+function checkAI(){return fetch('/api/plan',{cache:'no-store'}).then(r=>r.json()).then(setAiStatus).catch(()=>setAiStatus({configured:false,storageReady:false}));}
+useEffect(()=>{if(requestedMode==='live'&&!statusRequest.current)statusRequest.current=checkAI()},[requestedMode]);
+useEffect(()=>{try{setSources(JSON.parse(localStorage.getItem('shadowui.sources')||'{}'))}catch{}},[]);
 useEffect(()=>{if(ready)localStorage.setItem('shadowui.sources',JSON.stringify(sources))},[sources,ready]);
 useEffect(()=>{setDomainBusy(false);setCommand(undefined)},[active]);
 useEffect(()=>{const shortcut=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setActive(null);setDemoId(null);setTimeout(()=>document.getElementById('goal')?.focus(),0)}};window.addEventListener('keydown',shortcut);return ()=>window.removeEventListener('keydown',shortcut)},[]);
@@ -19,6 +22,7 @@ useEffect(()=>{if(ready)try{localStorage.setItem('shadowui.v1',JSON.stringify({w
 async function generate(text=prompt){
  if(!text.trim()||busy||domainBusy||planning.current)return;
  setError('');
+ if(requestedMode==='live'){planning.current=true;try{await (statusRequest.current??(statusRequest.current=checkAI()));}finally{planning.current=false;}}
  if(current?.domain?.kind==='schedule'&&!isNewGoal(text,current)){
   setCommand({id:crypto.randomUUID(),text});setDomainBusy(true);return;
  }
