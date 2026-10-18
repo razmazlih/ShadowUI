@@ -7,11 +7,11 @@ import {livePlan,liveScheduleIntent} from '../lib/openai-planner';
 import {transact,reserve,AIError} from '../lib/ai-budget';
 import {planDemo} from '../lib/planner';
 import {createSchedule} from '../lib/schedule';
-const originalFetch=global.fetch;const oldKey=process.env.OPENAI_API_KEY;const oldDir=process.env.AI_STATE_DIR;const oldBudget=process.env.AI_BUDGET_USD;
+const originalFetch=global.fetch;const oldKey=process.env.OPENAI_API_KEY;const oldDir=process.env.AI_STATE_DIR;const oldBudget=process.env.AI_BUDGET_USD;const oldRedisUrl=process.env.UPSTASH_REDIS_REST_URL;const oldRedisToken=process.env.UPSTASH_REDIS_REST_TOKEN;
 let dir:string;before(async()=>{dir=await mkdtemp(path.join(tmpdir(),'shadowui-ai-test-'));});
 let calls=0;
-beforeEach(async()=>{await rm(dir,{recursive:true,force:true});process.env.AI_STATE_DIR=dir;process.env.AI_BUDGET_USD='4.5';process.env.OPENAI_API_KEY='test-not-a-real-key';calls=0;});
-after(async()=>{global.fetch=originalFetch;for(const [key,value] of Object.entries({OPENAI_API_KEY:oldKey,AI_STATE_DIR:oldDir,AI_BUDGET_USD:oldBudget})){if(value===undefined)delete process.env[key];else process.env[key]=value;}await rm(dir,{recursive:true,force:true});});
+beforeEach(async()=>{await rm(dir,{recursive:true,force:true});delete process.env.UPSTASH_REDIS_REST_URL;delete process.env.UPSTASH_REDIS_REST_TOKEN;process.env.AI_STATE_DIR=dir;process.env.AI_BUDGET_USD='4.5';process.env.OPENAI_API_KEY='test-not-a-real-key';calls=0;});
+after(async()=>{global.fetch=originalFetch;for(const [key,value] of Object.entries({OPENAI_API_KEY:oldKey,AI_STATE_DIR:oldDir,AI_BUDGET_USD:oldBudget,UPSTASH_REDIS_REST_URL:oldRedisUrl,UPSTASH_REDIS_REST_TOKEN:oldRedisToken})){if(value===undefined)delete process.env[key];else process.env[key]=value;}await rm(dir,{recursive:true,force:true});});
 const workspace=planDemo('Help me study biology').workspace;
 function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,'gpt-4.1-mini');assert.ok(body.max_completion_tokens<=3500);assert.equal(body.store,false);assert.equal(body.messages.length,2);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(content)}}],usage});};}
 test('missing key sends no request and changes no budget',async()=>{delete process.env.OPENAI_API_KEY;global.fetch=async()=>{calls++;throw new Error('unexpected');};await assert.rejects(livePlan('test',undefined,'a'),/OPENAI_API_KEY/);assert.equal(calls,0);});
@@ -43,4 +43,12 @@ test('six requests per minute, corrupt ledger and oversized context fail closed'
 test('schedule intent returns validated preview operation and rejects invented IDs',async()=>{
  const schedule=createSchedule('schedule-test','six employees');mock({operation:{type:'set_min_days_off',value:3},explanation:'Three days off.'});const result=await liveScheduleIntent('Three days off',schedule,'a');assert.equal(result.operation?.type,'set_min_days_off');assert.equal(schedule.minDaysOff,2);
  mock({operation:{type:'assign',shiftId:'invented',employeeId:'maya'},explanation:'Assign Maya'});await assert.rejects(liveScheduleIntent('Assign Maya',schedule,'a'));assert.equal(schedule.revision,0);
+});
+
+test('Redis compare-and-set retries a collision without duplicating reservation',async()=>{
+ process.env.UPSTASH_REDIS_REST_URL='https://redis.invalid';process.env.UPSTASH_REDIS_REST_TOKEN='fake-redis-token';
+ let stored:string|null=null;let collisions=1;let mutations=0;
+ global.fetch=async(url,init)=>{assert.equal(url,'https://redis.invalid');const args=JSON.parse(String(init?.body));if(args[0]==='GET')return Response.json({result:stored});assert.equal(args[0],'EVAL');if(collisions-->0)return Response.json({result:0});if((stored??'')!==args[4])return Response.json({result:0});stored=args[5];mutations++;return Response.json({result:1});};
+ await transact(l=>reserve(l,'request',.01));assert.equal(mutations,1);assert.equal(JSON.parse(stored!).spent,.01);
+ global.fetch=async()=>new Response('unavailable',{status:503});await assert.rejects(livePlan('test',undefined,'a'),/storage/);
 });
