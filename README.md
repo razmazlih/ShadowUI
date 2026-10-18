@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open [ShadowUI](http://localhost:3000). **Local demo** needs no API key. It uses clearly labeled example data and limited deterministic intent rules. For optional live interface planning, copy `.env.example` to `.env.local`, set `AI_GATEWAY_API_KEY` and `SHADOWUI_MODEL` to an available provider/model ID, restart and select **Live AI**. Live mode sends the prompt and current workspace to the configured provider; credentials stay server-side. Live-provider behavior has not been tested with paid credentials here.
+Open [ShadowUI](http://localhost:3000). **Local demo** needs no API key. It uses clearly labeled example data and limited deterministic intent rules. For direct OpenAI planning, configure server-only `OPENAI_API_KEY`, restart and select **Live AI**. The model is pinned to `gpt-4.1-mini`. Production also needs shared durable budget storage: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, or `AI_STATE_DIR` on a persistent shared volume. Without durable storage production Live AI fails closed; a serverless `/tmp` directory is not sufficient. See [AI operations](docs/ai-operations.md) for setup, costs and safety limits. Demo remains available without credentials.
 
 ```sh
 npm run typecheck

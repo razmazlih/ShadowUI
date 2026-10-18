@@ -1,22 +1,28 @@
 import { z } from 'zod';
 import { WorkspaceSchema } from '@/lib/schema';
-import { planDemo, isNewGoal, isSchedulingGoal } from '@/lib/planner';
+import { planDemo } from '@/lib/planner';
 import {applyCandidate} from '@/lib/patch';
 
-const RequestSchema=z.object({prompt:z.string().trim().min(1).max(4000),current:WorkspaceSchema.nullish(),mode:z.enum(['demo','live']).default('demo')}).strict();
+import {ScheduleSchema} from '@/lib/schedule';
+import {liveScheduleIntent,livePlan} from '@/lib/openai-planner';
+import {AIError,limit,transact} from '@/lib/ai-budget';
+export const runtime='nodejs';
+export const maxDuration=60;
+function sameOrigin(request:Request){try{const target=new URL(request.url);target.host=request.headers.get('host')??target.host;return new URL(request.headers.get('origin')??'').origin===target.origin;}catch{return false;}}
+function sessionId(request:Request){return request.headers.get('cookie')?.match(/(?:^|; )shadowui_ai=([a-f0-9-]{36})(?:;|$)/)?.[1];}
+export async function GET(request:Request){
+ const session=sessionId(request)??crypto.randomUUID();
+ let state;try{const spent=await transact(l=>l.spent);state={configured:!!process.env.OPENAI_API_KEY,storageReady:true,spent,limit:limit(),warning:spent>=limit()*.8};}catch{state={configured:!!process.env.OPENAI_API_KEY,storageReady:false};}
+ return Response.json(state,{headers:{'Cache-Control':'no-store','Set-Cookie':`shadowui_ai=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400${new URL(request.url).protocol==='https:'?'; Secure':''}`}});
+}
+const RequestSchema=z.object({prompt:z.string().trim().min(1).max(4000),current:WorkspaceSchema.nullish(),mode:z.enum(['demo','live']).default('demo'),schedule:ScheduleSchema.optional()}).strict();
 export async function POST(request:Request){
  if(Number(request.headers.get('content-length')??0)>150000)return Response.json({error:'Request is too large.'},{status:413});
  let input:z.infer<typeof RequestSchema>;
  try{const body=await request.text();if(body.length>150000)return Response.json({error:'Request is too large.'},{status:413});input=RequestSchema.parse(JSON.parse(body));}catch{return Response.json({error:'Provide a valid prompt and workspace.'},{status:400});}
+ const session=sessionId(request);
+ if(input.mode==='live'&&(!session||!sameOrigin(request)))return Response.json({error:'Refresh this page before using Live AI. Cross-origin AI requests are blocked.'},{status:403});
+ if(input.schedule){if(input.mode!=='live')return Response.json({error:'Natural-language schedule proposals require Live AI; Demo controls remain available.'},{status:400});try{return Response.json(await liveScheduleIntent(input.prompt,input.schedule,session!),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e instanceof AIError?e.message:'Could not interpret this schedule request. No change was applied.'},{status:e instanceof AIError?e.status:503});}}
  if(input.mode==='demo'){const result=planDemo(input.prompt,input.current??undefined);if(result.operation==='patch'&&input.current)result.workspace=applyCandidate(input.current,result.workspace);return Response.json(result);}
- if(!process.env.AI_GATEWAY_API_KEY||!process.env.SHADOWUI_MODEL)return Response.json({error:'Live AI requires AI_GATEWAY_API_KEY and SHADOWUI_MODEL on the server. Demo mode is available.'},{status:503});
- try{
-  const {generateText,Output}=await import('ai');
-  const result=await generateText({model:process.env.SHADOWUI_MODEL as `${string}/${string}`,output:Output.object({schema:WorkspaceSchema}),abortSignal:AbortSignal.timeout(45000),system:`You are ShadowUI, an intent-to-interface compiler. Return a workspace JSON using only the provided schema. Never emit code, HTML, or executable expressions. Combine reusable primitives for the user's goal, rather than domain templates. All operations are local; never claim external tools or accounts were updated. Do not fabricate factual data: mark estimates and assumptions in description and notes. Use items as structured records. Quiz items need options and an answer matching an option. Flashcard items need answer. Calendar items use date YYYY-MM-DD and group as employee. Chart items use finite numeric value. Comparison components have criteria [{id,label,weight}] with weights 0..100 and items representing real options with scores keyed by criterion id (0..100); mark unverified scores as examples. Preserve user-edited criteria weights and option scores. Slider is a budget with numeric value. Timer value is minutes. Approval confirmation is local only. Use stable component and item IDs from current workspace when preserving context. Preserve existing user edits, completed items and notes. Patch only components relevant to a constraint change. An unrelated new goal creates a fresh workspace with a new ID. Keep visible text in user's language.`,prompt:JSON.stringify({intent:input.prompt,currentWorkspace:input.current??null}),});
-  const workspace=WorkspaceSchema.parse(result.output);
-  const operation=input.current&&!isNewGoal(input.prompt,input.current??undefined)?'patch':'create';
-  if(operation==='create'){delete workspace.domain;if(isSchedulingGoal(input.prompt))workspace.domain={kind:'schedule',id:crypto.randomUUID()};}else if(input.current?.domain){workspace.domain=input.current.domain;}
-  const applied=operation==='patch'&&input.current?applyCandidate(input.current,workspace):workspace;
-  return Response.json({workspace:applied,mode:'live',operation,explanation:'AI composed a validated specification. All component actions run locally; no external action was executed.'});
- }catch{return Response.json({error:'Live planning did not produce a valid workspace. Your saved work is unchanged. Retry or explicitly select Demo mode.'},{status:502});}
+ try{return Response.json(await livePlan(input.prompt,input.current??undefined,session!),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e instanceof AIError?e.message:'AI service is unavailable. No workspace changes were applied.'},{status:e instanceof AIError?e.status:503,headers:{'Cache-Control':'no-store'}});}
 }
