@@ -107,4 +107,4 @@ The grammar is reusable, but the hero's domain binding and constraints are imple
 - [Skeptical product/judging assessment](docs/strategy.md)
 - [Pre-submission checklist](docs/submission-checklist.md)
 
-Internal target: **October 21 evening, Jerusalem time**. Official rules checked October 18 state **October 23, 2026, noon PDT (22:00 Jerusalem)**; recheck before submitting. No submission, judging access, eligibility or competitive outcome is claimed. [Official rules](https://amazonappdev2026.devpost.com/rules).
+Internal target: **October 21 evening, Jerusalem time**. Official rules checked October 18 state **October 23, 2026, noon PDT (22:00 Jerusalem)**; recheck before submitting. No submission, judging access, eligibility or competitive outcome is claimed. [Official rules](https://amazonappdev2026.devpost.com/rules). 
