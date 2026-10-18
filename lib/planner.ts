@@ -1,7 +1,8 @@
+import { relevantLinks } from './relevant-links';
 import { WorkspaceSchema, type Workspace, type UIComponent, type PlanResult, type Item } from './schema';
 
 type Features = { learning:boolean; dates:boolean; team:boolean; schedule:boolean; travel:boolean; decision:boolean; budget:boolean };
-const features=(s:string):Features=>({learning:/study|exam|learn|quiz|biology|flashcard|ללמוד|מבחן/i.test(s),dates:/day|week|schedule|deadline|trip|exam|calendar|יום|שבוע/i.test(s),team:/employee|shift|team|staff|volunteer|project|launch|עובד|משמרת|צוות|סידור עבודה/i.test(s),schedule:/shift|roster|employee.*schedul|schedul.*employee|משמרת|סידור עבודה/i.test(s),travel:/trip|travel|japan|itinerary|טיול/i.test(s),decision:/compare|decid|opportunit|option|choose|השוו|להשוות/i.test(s),budget:/budget|cost|money|תקציב/i.test(s)});
+const features=(s:string):Features=>({learning:/study|exam|learn|quiz|biology|flashcard|ללמוד|מבחן/i.test(s),dates:/day|week|schedule|deadline|trip|exam|calendar|יום|שבוע/i.test(s),team:/employee|shift|team|staff|volunteer|project|launch|עובד|משמרת|צוות|סידור עבודה/i.test(s),schedule:/shift|roster|employee.*schedul|schedul.*employee|משמרת|סידור עבודה/i.test(s),travel:/trip|travel|flight|fly|hotel|japan|itinerary|טיול|טיס|לטוס|תעופה|מלון|חופשה/i.test(s),decision:/compare|decid|opportunit|option|choose|השוו|להשוות/i.test(s),budget:/budget|cost|money|תקציב/i.test(s)});
 const rows=(labels:string[], extras:Partial<Item>={}):Item[]=>labels.map((label,i)=>({id:`item-${i}`,label,...extras}));
 function component(type:UIComponent['type'],title:string,reason:string,items:Item[]=[],extra:Partial<UIComponent>={}):UIComponent{return {id:type,type,title,reason,span:'normal',items,...extra};}
 export function isNewGoal(prompt:string,current?:Workspace):boolean {
@@ -32,6 +33,8 @@ export function planDemo(prompt:string,current?:Workspace):PlanResult {
   if(!/one hour|1 hour|60 min|שעה|daniel|two days off|2 days off|budget|תקציב|test me|quiz me/i.test(prompt)){
    const notes=workspace.components.find(c=>c.type==='notes');if(notes)notes.text=`${notes.text??''}\nRequested adjustment: ${prompt}`;
   }
+  const links=relevantLinks(`${current.goal} ${prompt}`);
+  if(links && !workspace.components.some(c=>c.type==='links'))workspace.components.unshift(links);
   return {workspace:WorkspaceSchema.parse(workspace),mode:'demo',operation:'patch',explanation:'Updated the relevant local components and retained your existing work. Demo rules support time, budget and availability constraints; other requests are recorded as notes.'};
  }
  const f=features(prompt), components:UIComponent[]=[];
@@ -46,6 +49,7 @@ export function planDemo(prompt:string,current?:Workspace):PlanResult {
  if(f.decision)components.push(component('comparison','Evaluate the possibilities','Comparisons need explicit scores, assumptions and adjustable weights.',[{id:'option-a',label:'Option A',scores:{demand:70,effort:80,upside:60}},{id:'option-b',label:'Option B',scores:{demand:90,effort:40,upside:85}},{id:'option-c',label:'Option C',scores:{demand:50,effort:95,upside:45}}],{span:'wide',criteria:[{id:'demand',label:/business|opportunit/i.test(prompt)?'Customer demand':'Expected benefit',weight:40},{id:'effort',label:'Ease of execution',weight:35},{id:'upside',label:/business|opportunit/i.test(prompt)?'Potential return':'Long-term value',weight:25}]}));
  if(!f.learning&&!f.travel&&!f.team&&!f.decision)components.push(component('table','Working canvas','An unfamiliar goal benefits from editable structured information.',rows(['Resources available','Key uncertainty','First experiment'],{detail:'Add your own evidence',value:0}),{span:'wide'}));
  if(f.schedule||f.decision)components.push(component('approval','Review & confirm','Consequential proposals should be explicitly confirmed.',[],{text:'Confirmation saves a local decision only. No external service is connected.'}));
+ const links=relevantLinks(prompt);if(links)components.push(links);
  components.push(component('notes','Context & assumptions','Keep user context visible and editable.',[],{text:`Goal: ${prompt}\n\nDemo mode: example content and estimates, not verified external data.${f.team?'\nExample roster: Daniel, Maya, Noa, Amir, Lior and Yael.':''}${f.decision?'\nSample options and scores are illustrative. Replace them with your evidence.':''}`}));
  const title=prompt.replace(/^(help me|i (?:want|need) to)\s+/i,'').slice(0,65);
  if(/(?:send|transfer|pay|book|purchase|deploy|publish|email|delete|connect).*(?:money|bank|flight|hotel|email|account|production|external)|(?:hack|steal|bypass)/i.test(prompt))components.unshift(component('notes','Capability boundary','Requested external execution requires an integration this application does not have.',[],{id:'capability-boundary',text:'I cannot execute that external action. No payment, booking, message, deployment or account change has occurred. You can use this workspace to prepare a checklist, compare options or record a decision locally.'}));

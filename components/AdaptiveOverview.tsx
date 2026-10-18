@@ -2,7 +2,7 @@
 import {ArrowUpRight, Check, Circle, Sparkles, Layers, Target} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
 
-export const toolLabels:Record<UIComponent['type'],string>={checklist:'Action plan',timeline:'Timeline',calendar:'Calendar',kanban:'Task board',flashcards:'Recall cards',quiz:'Practice',slider:'Constraints',table:'Working table',comparison:'Compare options',notes:'Your context',timer:'Focus timer',approval:'Confirmation',chart:'Breakdown'};
+export const toolLabels:Record<UIComponent['type'],string>={checklist:'Action plan',timeline:'Timeline',calendar:'Calendar',kanban:'Task board',flashcards:'Recall cards',quiz:'Practice',slider:'Constraints',table:'Working table',comparison:'Compare options',notes:'Your context',timer:'Focus timer',approval:'Confirmation',chart:'Breakdown',links:'Useful links'};
 export function isComplete(c:UIComponent|undefined){if(!c)return false;return c.type==='approval'?c.value===1:['checklist','quiz','kanban'].includes(c.type)&&c.items.length>0&&c.items.every(i=>i.done||i.group==='Done');}
 export function visibleComponents(components:UIComponent[]){return components.filter(c=>{if(!c.visibleWhen)return true;const dependency=components.find(d=>d.id===c.visibleWhen?.componentId);const completed=dependency?.type==='approval'?dependency.value===1:!!dependency?.items.length&&dependency.items.every(i=>i.done);return completed===c.visibleWhen.completed;});}
 export default function AdaptiveOverview({components,focus,onFocus}:{components:UIComponent[];focus:string|null;onFocus:(id:string|null)=>void}){
