@@ -34,3 +34,11 @@ At **20 seconds**, the target is to show a data-driven transformation. At **60 s
 - Keep conflict, candidate, commit and receipt legible. A quick registry flash is less useful than a visible causal result.
 - If the server persistence path is not mounted persistently in deployment, say so; do not claim restart durability there.
 - Keep the final upload under three minutes and provide English narration or captions. [Official submission rules](https://amazonappdev2026.devpost.com/rules)
+
+## Conversation history
+
+In **Local demo**, the sidebar includes ten Hebrew sample conversations, newest first (7–18 October 2026, Israel time). Open any title to read the entire transcript and edit its local outcome using existing notes, checklists, calendar, timeline, comparison and chart components. The recorded follow-ups demonstrate revisions; they are not a live assistant session. Use **New workspace** to try a new request.
+
+The source is `lib/demo-conversations.ts`. These fixtures are never merged into `shadowui.v1`, sent to `/api/plan`, or mounted as scheduling domains. Switching to **Live AI** hides them. Outcome edits are temporary and reset when leaving the conversation. All people, documents, prices and account data are fictional; email/document search and availability checks illustrate a proposed interface, not connected capabilities. No sample sends messages, creates external events or makes purchases.
+
+Validation: `npm test`, `npm run typecheck`, and `tests/e2e/demo-history.spec.ts` (desktop/mobile, all ten transcripts, no API calls, existing workspace storage preserved, Live mode separation).
