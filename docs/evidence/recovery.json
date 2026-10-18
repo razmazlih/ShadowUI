@@ -1,0 +1,583 @@
+{
+  "capturedAt": "2026-10-18T17:01:26.493Z",
+  "scope": "Reinspection of the prior evidence schedule after the owned development process was stopped and production server started on the same persistent directory.",
+  "originalReceipt": "75793fd0-93db-422b-b810-97a42d7d60f3",
+  "recoveredReceipt": "75793fd0-93db-422b-b810-97a42d7d60f3",
+  "verified": true,
+  "exchanges": [
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "ShadowUI recovery evidence host",
+            "version": "1.0"
+          }
+        }
+      },
+      "httpStatus": 200,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            }
+          },
+          "serverInfo": {
+            "name": "raben-shadowui",
+            "version": "0.1.0"
+          },
+          "instructions": "Local single-process demo server. Schedule tools persist local files, never external services. Inspect conflicts and preview changes before explicit commit."
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+      },
+      "httpStatus": 200,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "tools": [
+            {
+              "name": "compose_workspace",
+              "description": "Compose or adapt a validated local ShadowUI workspace. Returns a proposal; does not modify external services or browser storage.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "workspace": {
+                    "type": "object",
+                    "description": "Optional current workspace returned by a previous call."
+                  }
+                },
+                "required": [
+                  "prompt"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "validate_workspace",
+              "description": "Validate a ShadowUI workspace against the trusted component grammar.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "workspace": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "workspace"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "create_schedule",
+              "description": "Create or retrieve a durable local draft with a clearly labeled six-employee fixture. Supports goal constraints: Daniel unavailable Wednesday and N days off.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "goal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "id",
+                  "goal"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "inspect_schedule",
+              "description": "Read a local schedule, deterministic conflicts, available alternatives and assumptions.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "update_schedule",
+              "description": "Persist a validated local schedule operation with revision and idempotency checks; undo restores previous content to draft.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actionId": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "operation": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "set_availability"
+                          },
+                          "employeeId": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "type": "string"
+                          },
+                          "unavailable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "employeeId",
+                          "date",
+                          "unavailable"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "assign"
+                          },
+                          "shiftId": {
+                            "type": "string"
+                          },
+                          "employeeId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "shiftId",
+                          "employeeId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "set_min_days_off"
+                          },
+                          "value": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "undo"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "expectedRevision",
+                  "actionId",
+                  "operation"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "preview_schedule_change",
+              "description": "Evaluate a candidate entire schedule without persistence.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "operation": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "set_availability"
+                          },
+                          "employeeId": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "type": "string"
+                          },
+                          "unavailable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "employeeId",
+                          "date",
+                          "unavailable"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "assign"
+                          },
+                          "shiftId": {
+                            "type": "string"
+                          },
+                          "employeeId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "shiftId",
+                          "employeeId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "set_min_days_off"
+                          },
+                          "value": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "undo"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "expectedRevision",
+                  "operation"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "commit_schedule",
+              "description": "Commit a conflict-free local schedule only after explicit confirmation, persisting a real receipt. No external service is changed.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "actionId": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "confirmed": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "expectedRevision",
+                  "actionId",
+                  "confirmed"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "openWorldHint": false
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "inspect_schedule",
+          "arguments": {
+            "id": "01490e75-d0da-4590-bc13-dda1ff6ef739"
+          }
+        }
+      },
+      "httpStatus": 200,
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"schedule\":{\"id\":\"01490e75-d0da-4590-bc13-dda1ff6ef739\",\"revision\":3,\"goal\":\"Organize next week shifts for six employees, including Daniel. Everyone needs two days off.\",\"employees\":[{\"id\":\"daniel\",\"name\":\"Daniel\",\"unavailable\":[\"2026-10-21\"]},{\"id\":\"maya\",\"name\":\"Maya\",\"unavailable\":[]},{\"id\":\"noa\",\"name\":\"Noa\",\"unavailable\":[]},{\"id\":\"amir\",\"name\":\"Amir\",\"unavailable\":[]},{\"id\":\"lior\",\"name\":\"Lior\",\"unavailable\":[]},{\"id\":\"yael\",\"name\":\"Yael\",\"unavailable\":[]}],\"shifts\":[{\"id\":\"shift-0\",\"date\":\"2026-10-19\",\"start\":\"09:00\",\"end\":\"13:00\",\"employeeId\":\"daniel\"},{\"id\":\"shift-1\",\"date\":\"2026-10-19\",\"start\":\"13:00\",\"end\":\"17:00\",\"employeeId\":\"maya\"},{\"id\":\"shift-2\",\"date\":\"2026-10-20\",\"start\":\"09:00\",\"end\":\"13:00\",\"employeeId\":\"noa\"},{\"id\":\"shift-3\",\"date\":\"2026-10-20\",\"start\":\"13:00\",\"end\":\"17:00\",\"employeeId\":\"amir\"},{\"id\":\"shift-4\",\"date\":\"2026-10-21\",\"start\":\"09:00\",\"end\":\"13:00\",\"employeeId\":\"lior\"},{\"id\":\"shift-5\",\"date\":\"2026-10-21\",\"start\":\"13:00\",\"end\":\"17:00\",\"employeeId\":\"yael\"},{\"id\":\"shift-6\",\"date\":\"2026-10-22\",\"start\":\"09:00\",\"end\":\"13:00\",\"employeeId\":\"lior\"},{\"id\":\"shift-7\",\"date\":\"2026-10-22\",\"start\":\"13:00\",\"end\":\"17:00\",\"employeeId\":\"maya\"},{\"id\":\"shift-8\",\"date\":\"2026-10-23\",\"start\":\"09:00\",\"end\":\"13:00\",\"employeeId\":\"noa\"},{\"id\":\"shift-9\",\"date\":\"2026-10-23\",\"start\":\"13:00\",\"end\":\"17:00\",\"employeeId\":\"amir\"}],\"minDaysOff\":2,\"status\":\"committed\",\"receipt\":{\"id\":\"75793fd0-93db-422b-b810-97a42d7d60f3\",\"at\":\"2026-10-18T16:57:05.153Z\",\"revision\":3,\"actionId\":\"61bc6ed1-086c-4f28-8910-3222f62a7291\"}},\"evaluation\":{\"conflicts\":[],\"uncovered\":[],\"workingDays\":{\"daniel\":1,\"maya\":2,\"noa\":2,\"amir\":2,\"lior\":2,\"yael\":1},\"valid\":true},\"alternatives\":{},\"assumptions\":[\"Local schedule only; no external calendar or employer system is connected.\",\"Example roster of six employees, October 19–23, 2026; two four-hour shifts each weekday.\",\"Days off are evaluated per seven-day Monday–Sunday week. Fairness scores prefer fewer assigned hours.\"]}"
+            }
+          ],
+          "structuredContent": {
+            "schedule": {
+              "id": "01490e75-d0da-4590-bc13-dda1ff6ef739",
+              "revision": 3,
+              "goal": "Organize next week shifts for six employees, including Daniel. Everyone needs two days off.",
+              "employees": [
+                {
+                  "id": "daniel",
+                  "name": "Daniel",
+                  "unavailable": [
+                    "2026-10-21"
+                  ]
+                },
+                {
+                  "id": "maya",
+                  "name": "Maya",
+                  "unavailable": []
+                },
+                {
+                  "id": "noa",
+                  "name": "Noa",
+                  "unavailable": []
+                },
+                {
+                  "id": "amir",
+                  "name": "Amir",
+                  "unavailable": []
+                },
+                {
+                  "id": "lior",
+                  "name": "Lior",
+                  "unavailable": []
+                },
+                {
+                  "id": "yael",
+                  "name": "Yael",
+                  "unavailable": []
+                }
+              ],
+              "shifts": [
+                {
+                  "id": "shift-0",
+                  "date": "2026-10-19",
+                  "start": "09:00",
+                  "end": "13:00",
+                  "employeeId": "daniel"
+                },
+                {
+                  "id": "shift-1",
+                  "date": "2026-10-19",
+                  "start": "13:00",
+                  "end": "17:00",
+                  "employeeId": "maya"
+                },
+                {
+                  "id": "shift-2",
+                  "date": "2026-10-20",
+                  "start": "09:00",
+                  "end": "13:00",
+                  "employeeId": "noa"
+                },
+                {
+                  "id": "shift-3",
+                  "date": "2026-10-20",
+                  "start": "13:00",
+                  "end": "17:00",
+                  "employeeId": "amir"
+                },
+                {
+                  "id": "shift-4",
+                  "date": "2026-10-21",
+                  "start": "09:00",
+                  "end": "13:00",
+                  "employeeId": "lior"
+                },
+                {
+                  "id": "shift-5",
+                  "date": "2026-10-21",
+                  "start": "13:00",
+                  "end": "17:00",
+                  "employeeId": "yael"
+                },
+                {
+                  "id": "shift-6",
+                  "date": "2026-10-22",
+                  "start": "09:00",
+                  "end": "13:00",
+                  "employeeId": "lior"
+                },
+                {
+                  "id": "shift-7",
+                  "date": "2026-10-22",
+                  "start": "13:00",
+                  "end": "17:00",
+                  "employeeId": "maya"
+                },
+                {
+                  "id": "shift-8",
+                  "date": "2026-10-23",
+                  "start": "09:00",
+                  "end": "13:00",
+                  "employeeId": "noa"
+                },
+                {
+                  "id": "shift-9",
+                  "date": "2026-10-23",
+                  "start": "13:00",
+                  "end": "17:00",
+                  "employeeId": "amir"
+                }
+              ],
+              "minDaysOff": 2,
+              "status": "committed",
+              "receipt": {
+                "id": "75793fd0-93db-422b-b810-97a42d7d60f3",
+                "at": "2026-10-18T16:57:05.153Z",
+                "revision": 3,
+                "actionId": "61bc6ed1-086c-4f28-8910-3222f62a7291"
+              }
+            },
+            "evaluation": {
+              "conflicts": [],
+              "uncovered": [],
+              "workingDays": {
+                "daniel": 1,
+                "maya": 2,
+                "noa": 2,
+                "amir": 2,
+                "lior": 2,
+                "yael": 1
+              },
+              "valid": true
+            },
+            "alternatives": {},
+            "assumptions": [
+              "Local schedule only; no external calendar or employer system is connected.",
+              "Example roster of six employees, October 19–23, 2026; two four-hour shifts each weekday.",
+              "Days off are evaluated per seven-day Monday–Sunday week. Fairness scores prefer fewer assigned hours."
+            ]
+          },
+          "isError": false
+        }
+      }
+    }
+  ]
+}
