@@ -1,9 +1,9 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {TaskContractSchema,type TaskContract} from './task-contract';
-import {assembleTask,rankTaskCandidates,type TaskAssembly} from './task-engine';
+import {assembleTask,rankTaskCandidates,demoTaskContract,type TaskAssembly} from './task-engine';
 import {validateTaskInstances} from './task-instance-validation';
-import {ComponentDefinitionSchema,validateDefinition,primitiveInputSchema,primitiveStateSchema,outputSchema,type ComponentDefinition} from './catalog';
+import {ComponentDefinitionSchema,validateDefinition,primitiveInputSchema,primitiveStateSchema,outputSchema,seedDefinitions,type ComponentDefinition} from './catalog';
 import {listDefinitions,getDefinition,saveGeneratedDefinition,getCatalogEmbeddingCache,setCatalogEmbeddingCache} from './catalog-store';
 import {semanticScores,type EmbeddingCache} from './semantic-search';
 import {interpretTask,populateTask} from './task-ai';
@@ -54,8 +54,18 @@ export type PipelineDependencies={
 const defaults:PipelineDependencies={list:listDefinitions,get:getDefinition,saveGenerated:saveGeneratedDefinition,interpret:interpretTask,populate:populateTask,semantics:semanticScores};
 export async function runTaskPipeline(prompt:string,current:Workspace|undefined,session:string,history:unknown[]=[],overrides:Partial<PipelineDependencies>={}){
  const deps={...defaults,...overrides};
+ // History is persisted by the client even before a workspace exists. Once the
+ // assistant has replied, clarification cannot block this conversation again.
+ const clarificationUsed=history.some(turn=>!!turn&&typeof turn==='object'&&(turn as {role?:string}).role==='assistant');
+ const guidance=clarificationUsed?'The clarification allowance is exhausted. Do not ask any more questions. Interpret the original request plus the latest answer as workspace_change with a complete contract and clarification:null. Proceed with editable missing inputs and explicit assumptions.':'';
  let repairUsed=false,interpretation:Awaited<ReturnType<typeof interpretTask>>;
- try{interpretation=await deps.interpret(prompt,current,session,history);}catch(error){if(!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;interpretation=await deps.interpret(prompt,current,session,history,'The previous task contract failed validation. Correct only its schema/references: '+error.sourceError.message.slice(0,2500));}
+ try{interpretation=await deps.interpret(prompt,current,session,history,guidance);}catch(error){if(!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;interpretation=await deps.interpret(prompt,current,session,history,guidance+' The previous task contract failed validation. Correct only its schema/references: '+error.sourceError.message.slice(0,2500));}
+ if(clarificationUsed&&(interpretation.intent==='clarification'||interpretation.contract?.clarification)){
+  const messages=history.filter((turn):turn is {role:string;content:string}=>!!turn&&typeof turn==='object'&&(turn as {role?:string}).role==='user'&&typeof (turn as {content?:string}).content==='string');
+  const objective=[...messages.map(turn=>turn.content),prompt].join('\n').slice(-4000);
+  const contract=interpretation.contract??demoTaskContract(current?.goal??objective,[seedDefinitions().find(d=>d.id==='checklist')!.template]);
+  interpretation={...interpretation,intent:'workspace_change',contract:{...contract,clarification:undefined},reply:/[א-ת]/.test(prompt)?'יוצר סביבת עבודה לעריכה. מידע חסר נשאר כקלט להשלמה.':'Creating an editable workspace. Missing information remains available for you to enter.'};
+ }
  if(interpretation.intent!=='workspace_change')return {operation:interpretation.intent==='schedule_change'?'schedule':'reply',intent:interpretation.intent,explanation:interpretation.reply,mode:'live' as const,budget:interpretation.budget};
  const contract=TaskContractSchema.parse(interpretation.contract);
  if(contract.clarification)return {operation:'reply',intent:'clarification',explanation:contract.clarification,contract,mode:'live' as const,budget:interpretation.budget};
@@ -69,7 +79,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  const scores=eligible.length?await deps.semantics(contract.objective,eligible,session,cache):{};
  let assembly=assembleTask(contract,definitions,{semanticScores:scores});
  const canGenerate=assembly.coverage.missing.some(m=>/^(?:calculate|collect)\./.test(m.capability)&&!contract.actions.find(a=>a.id===m.actionId)?.external);
- if(!assembly.components.length&&!canGenerate)return {operation:'reply',intent:'clarification',explanation:assembly.limitations.join(' '),contract,coverage:assembly.coverage,mode:'live' as const,budget:interpretation.budget};
+ if(!assembly.components.length&&!canGenerate)return {operation:'reply',intent:'workspace_question',explanation:assembly.limitations.join(' '),contract,coverage:assembly.coverage,mode:'live' as const,budget:interpretation.budget};
  const chosen=assembly.selections.map(s=>definitions.find(d=>d.id===s.definitionId&&d.version===s.definitionVersion)!);
  let generated:Awaited<ReturnType<PipelineDependencies['populate']>>;
  try{generated=await deps.populate(contract,chosen,previous,session);}catch(error){if(repairUsed||!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;generated=await deps.populate(contract,chosen,previous,session,'Repair the invalid JSON/schema from the previous response; return the required structured workspace and bindings only.');}

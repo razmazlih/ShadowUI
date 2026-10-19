@@ -108,3 +108,16 @@ test('task interpretation schema failure gets one focused repair',async()=>{
 test('interpretation and behavior share one repair allowance',async()=>{
  const c=week(),contract=demoTaskContract('Timed week',[c]);contract.actions[0].inputKind='schedule';const h=harness(contract,[c]);c.weeklySchedule!.days[0].events[0].end='01:00';const valid=h.deps.interpret;let attempts=0;h.deps.interpret=async(...args)=>{if(attempts++===0)throw new AIError(502,'Invalid JSON',new SyntaxError('Bad task JSON'));return valid(...args);};await assert.rejects(runTaskPipeline(contract.objective,undefined,session,[],h.deps),/after one repair/);assert.equal(attempts,2);assert.equal(h.calls.populate,1);assert.equal(h.saved.length,0);
 });
+
+test('after one assistant clarification the pipeline creates even if the model asks again',async()=>{
+ const c=component('checklist'),contract=demoTaskContract('ארגן משימות',[c]),h=harness(contract,[c]);
+ let guidance='';
+ h.deps.interpret=async(_prompt,_current,_session,_history,feedback)=>{guidance=feedback??'';return {intent:'clarification',reply:'עוד שאלה?',contract:null,budget,cached:false};};
+ const result=await runTaskPipeline('תתחיל כבר',undefined,session,[{role:'user',content:'ארגן משימות'},{role:'assistant',content:'איזה משימות?'}],h.deps);
+ assert.equal(result.operation,'create');assert.ok('workspace' in result&&result.workspace);assert.match(guidance,/allowance is exhausted/);assert.equal(h.calls.populate,1);
+});
+test('a contract cannot ask a second blocking clarification',async()=>{
+ const c=component('checklist'),contract={...demoTaskContract('Tasks',[c]),clarification:'Which tasks?'},h=harness(contract,[c]);
+ const result=await runTaskPipeline('Use empty inputs',undefined,session,[{role:'assistant',content:'What should be included?'}],h.deps);
+ assert.equal(result.operation,'create');assert.equal(result.contract?.clarification,undefined);
+});
