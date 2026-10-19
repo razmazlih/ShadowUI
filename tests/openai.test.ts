@@ -10,13 +10,13 @@ import {createSchedule} from '../lib/schedule';
 const originalFetch=global.fetch;const oldKey=process.env.OPENAI_API_KEY;const oldDir=process.env.AI_STATE_DIR;const oldBudget=process.env.AI_BUDGET_USD;const oldRedisUrl=process.env.UPSTASH_REDIS_REST_URL;const oldRedisToken=process.env.UPSTASH_REDIS_REST_TOKEN;
 let dir:string;before(async()=>{dir=await mkdtemp(path.join(tmpdir(),'shadowui-ai-test-'));});
 let calls=0;
-beforeEach(async()=>{await rm(dir,{recursive:true,force:true});delete process.env.UPSTASH_REDIS_REST_URL;delete process.env.UPSTASH_REDIS_REST_TOKEN;process.env.AI_STATE_DIR=dir;process.env.AI_BUDGET_USD='4.5';process.env.OPENAI_API_KEY='test-not-a-real-key';calls=0;});
+beforeEach(async()=>{await rm(dir,{recursive:true,force:true});delete process.env.UPSTASH_REDIS_REST_URL;delete process.env.UPSTASH_REDIS_REST_TOKEN;process.env.AI_STATE_DIR=dir;process.env.AI_BUDGET_USD='1';process.env.OPENAI_API_KEY='test-not-a-real-key';calls=0;});
 after(async()=>{global.fetch=originalFetch;for(const [key,value] of Object.entries({OPENAI_API_KEY:oldKey,AI_STATE_DIR:oldDir,AI_BUDGET_USD:oldBudget,UPSTASH_REDIS_REST_URL:oldRedisUrl,UPSTASH_REDIS_REST_TOKEN:oldRedisToken})){if(value===undefined)delete process.env[key];else process.env[key]=value;}await rm(dir,{recursive:true,force:true});});
 const workspace=planDemo('Help me study biology').workspace;
 function providerContent(content:unknown){
  const data=content as {workspace?:typeof workspace};
  if(!data.workspace?.components?.every(c=>Array.isArray(c.items)))return content;
- return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
+ return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({custom:null,value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
 }
 function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,'gpt-4.1-mini');assert.ok(body.max_completion_tokens<=6000);assert.equal(body.store,false);assert.equal(body.messages.length,2);if((content as {workspace?:unknown}).workspace)assert.equal(body.response_format.json_schema.strict,true);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent(content))}}],usage});};}
 test('missing key sends no request and changes no budget',async()=>{delete process.env.OPENAI_API_KEY;global.fetch=async()=>{calls++;throw new Error('unexpected');};await assert.rejects(livePlan('test',undefined,'a'),/OPENAI_API_KEY/);assert.equal(calls,0);});
@@ -28,10 +28,10 @@ test('validated response, usage settlement, session-scoped cache and follow-up c
  const follow=await livePlan('Make it one hour',workspace,'a');assert.equal(follow.operation,'patch');assert.equal(follow.workspace.id,workspace.id);
 });
 test('budget blocks before fetch, including reservation for an in-flight request',async()=>{
- await transact(l=>{l.spent=4.4999});mock({workspace});await assert.rejects(livePlan('study',undefined,'a'),(e:unknown)=>e instanceof AIError&&e.status===402);assert.equal(calls,0);
+ await transact(l=>{l.spent=.9999});mock({workspace});await assert.rejects(livePlan('study',undefined,'a'),(e:unknown)=>e instanceof AIError&&e.status===402);assert.equal(calls,0);
 });
 test('atomic local lock rejects concurrent reservation rather than overspend',async()=>{
- const results=await Promise.allSettled(Array.from({length:12},(_,i)=>transact(l=>reserve(l,String(i),1))));assert.ok(results.some(r=>r.status==='rejected'));assert.ok((await transact(l=>l.spent))<=4.5);
+ const results=await Promise.allSettled(Array.from({length:12},(_,i)=>transact(l=>reserve(l,String(i),1))));assert.ok(results.some(r=>r.status==='rejected'));assert.ok((await transact(l=>l.spent))<=1);
 });
 test('duplicate while running never sends second paid request',async()=>{
  let release!:()=>void;const gate=new Promise<void>(r=>release=r);global.fetch=async()=>{calls++;await gate;return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent({workspace}))}}]});};

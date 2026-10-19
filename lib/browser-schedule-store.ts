@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {ScheduleSchema,OperationSchema,ScheduleError,createSchedule,scheduleView,evaluateSchedule,applyScheduleOperation,type Schedule,type ScheduleView} from './schedule';
+import {ScheduleSchema,OperationSchema,ScheduleError,createSchedule,migrateLegacySchedule,scheduleView,evaluateSchedule,applyScheduleOperation,type Schedule,type ScheduleView} from './schedule';
 const State=z.object({schedule:ScheduleSchema,history:z.array(ScheduleSchema).max(100),actions:z.record(z.object({fingerprint:z.string(),result:ScheduleSchema}))});
 const Id=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
 export const browserScheduleTools=['create_schedule','inspect_schedule','update_schedule','preview_schedule_change','commit_schedule'];
@@ -10,9 +10,10 @@ export class BrowserScheduleStore{
   let data:z.infer<typeof State>|undefined;
   try{const raw=this.storage.getItem(key);if(raw)data=State.parse(JSON.parse(raw));}catch{throw new ScheduleError('STORAGE_ERROR','Browser schedule could not be read. Browser storage must be available.');}
   const save=()=>{try{this.storage.setItem(key,JSON.stringify(data));}catch{throw new ScheduleError('STORAGE_ERROR','Browser schedule could not be saved. Browser storage may be full or unavailable.');}};
-  if(name==='create_schedule'){if(!data){data={schedule:createSchedule(id,z.string().min(1).max(4000).parse(args.goal)),history:[],actions:{}};save();}return scheduleView(data.schedule);}
+  const migrate=()=>{if(!data)return;const schedule=migrateLegacySchedule(data.schedule);if(schedule){data={schedule,history:[],actions:{}};save();}};
+  if(name==='create_schedule'){if(!data){data={schedule:createSchedule(id,z.string().min(1).max(4000).parse(args.goal)),history:[],actions:{}};save();}else migrate();return scheduleView(data.schedule);}
   if(!data)throw new ScheduleError('NOT_FOUND','Schedule does not exist in this browser.');
-  if(name==='inspect_schedule')return scheduleView(data.schedule);
+  migrate();if(name==='inspect_schedule')return scheduleView(data.schedule);
   const revision=z.number().int().min(0).parse(args.expectedRevision);
   const preview=name==='preview_schedule_change',commit=name==='commit_schedule';
   if(!preview&&!commit&&name!=='update_schedule')throw new ScheduleError('INVALID_INPUT','Unknown browser demo tool.');
