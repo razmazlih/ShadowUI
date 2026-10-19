@@ -66,3 +66,16 @@ for(const type of ['notes','timer','table'])test(`a lone ${type} uses its natura
 test('demo notes and checklist share a desktop row when their content fits',async({page})=>{
  await page.setViewportSize({width:1440,height:1100});await page.goto('/');const history=page.getByLabel('היסטוריית שיחות דמו');await history.getByRole('button').last().click();await expect(page.locator('.demo-conversation .r-card')).not.toHaveCount(0);await geometry(page);const notes=page.locator('.demo-conversation .r-card.tool-notes');const checklist=page.locator('.demo-conversation .r-card.tool-checklist');await expect(notes).toHaveCount(1);await expect(checklist).toHaveCount(1);await expect.poll(async()=>{const n=await notes.boundingBox(),c=await checklist.boundingBox();return !!n&&!!c&&Math.abs(n.y-c.y)<2;}).toBe(true);
 });
+test('workspace cards reorder by pointer and keyboard and keep their edits after reload',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:/Learn something deeply/}).click();
+ const cards=page.locator('.r-grid > .r-card');await expect(cards.first()).toBeVisible();
+ const ids=await cards.evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-component-id')));
+ await page.getByRole('checkbox').first().check();
+ const handle=cards.first().getByRole('button',{name:/^Move /});const from=await handle.boundingBox();const to=await cards.nth(1).boundingBox();
+ if(!from||!to)throw new Error('Missing card bounds');
+ await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();await page.mouse.move(to.x+to.width/2,to.y+to.height/2,{steps:10});await page.mouse.up();
+ await expect(cards.first()).toHaveAttribute('data-component-id',ids[1]!);
+ await expect(cards.nth(1)).toHaveAttribute('data-component-id',ids[0]!);
+ await page.reload();await expect(cards.first()).toHaveAttribute('data-component-id',ids[1]!);await expect(page.getByRole('checkbox').first()).toBeChecked();
+ await cards.nth(1).getByRole('button',{name:/^Move /}).press('ArrowUp');await expect(cards.first()).toHaveAttribute('data-component-id',ids[0]!);
+});
