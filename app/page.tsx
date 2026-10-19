@@ -36,7 +36,7 @@ async function generate(text=prompt){
  if(requestedMode==='live'){planning.current=true;try{await (statusRequest.current??(statusRequest.current=checkAI()));}finally{planning.current=false;}}
  planning.current=true;setBusy(true);const origin=active;
  try{
-  const response=await fetch('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:text,current:current||null,mode:requestedMode,history}),signal:AbortSignal.timeout(55000)});
+  const response=await fetch('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:text,current:current||null,mode:requestedMode,history}),signal:AbortSignal.timeout(125000)});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not create your workspace.');
   if(result.budget)setAiStatus(old=>({...old!,...result.budget}));
   if(result.operation==='schedule'&&current?.domain){setCommand({id:crypto.randomUUID(),text,workspaceId:origin??undefined});setDomainBusy(true);return;}
