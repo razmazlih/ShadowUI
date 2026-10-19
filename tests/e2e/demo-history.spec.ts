@@ -11,7 +11,11 @@ test('all demo transcripts open without network actions or touching saved work',
  await expect(history.getByRole('button')).toHaveCount(10);
  for(let i=0;i<10;i++){
   await history.getByRole('button').nth(i).click();
-  await expect(page.getByRole('heading',{name:'מבקשה לתוצר'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'התוצר שלכם'})).toBeVisible();
+  await expect(page.locator('.demo-transcript')).not.toHaveAttribute('open','');
+  await expect(page.locator('.r-card:visible')).toHaveCount(1);
+  expect(await page.locator('.demo-transcript').evaluate(el=>!!el.previousElementSibling?.querySelector('.r-card'))).toBe(true);
+  await page.locator('.demo-transcript > summary').click();
   await expect(page.locator('.demo-message').first()).toContainText('אתם');
   await expect(page.locator('.demo-message').last()).toContainText('ShadowUI');
   await expect(page.locator('.demo-end')).toBeVisible();
@@ -35,5 +39,8 @@ test('mobile history closes on selection and transcript fits viewport',async({pa
  await expect(page.getByRole('heading',{name:'מפגישה לחבילת עבודה'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
  await expect(page.locator('.demo-message')).toHaveCount(6);
+ await expect(page.locator('.demo-message').first()).not.toBeVisible();
+ await page.locator('.demo-transcript > summary').click();
+ await expect(page.locator('.demo-message').first()).toBeVisible();
  await page.screenshot({path:'work/demo-mobile.png'});
 });

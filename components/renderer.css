@@ -9,3 +9,37 @@
 .r-resource-link div{display:flex;flex-direction:column;gap:6px;min-width:0}
 .r-resource-link small{opacity:.65;overflow-wrap:anywhere}
 .r-resource-link svg{flex-shrink:0;transform:rotate(-45deg)}
+
+/* One working surface, with a stable map of the available tools. */
+.workspace-stage{display:grid;grid-template-columns:230px minmax(0,1fr);gap:24px;align-items:start;margin-top:16px}
+.workspace-stage .adaptive-overview{position:sticky;top:16px;margin:0;background:var(--panel,#fff);border-color:var(--line,#e9e6e0);border-radius:12px;min-width:0}
+.workspace-stage .adaptive-summary{padding:16px;display:block}
+.workspace-stage .adaptive-metrics{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;line-height:1.5;color:var(--muted,#676158)}
+.workspace-stage .adaptive-next{margin:0 12px 12px;padding:12px;display:flex;flex-direction:column;align-items:stretch;gap:8px;border-radius:8px}
+.workspace-stage .adaptive-next p{font-size:12px;margin:4px 0 0;overflow-wrap:anywhere}
+.workspace-stage .adaptive-next button{padding:8px;font-size:12px;white-space:normal}
+.workspace-stage .adaptive-eyebrow{font-size:10px;letter-spacing:.4px}
+.workspace-stage .adaptive-tools{display:flex;flex-direction:column;gap:4px;padding:8px;border-top:1px solid var(--line,#e9e6e0)}
+.workspace-stage .adaptive-tools button{width:100%;min-width:0;text-align:start;justify-content:flex-start;align-items:flex-start;gap:10px;padding:12px 10px;font-size:13px;border-radius:8px;color:var(--text,#343c34)}
+.workspace-stage .adaptive-tools button>svg{flex-shrink:0;margin-top:2px}
+.tool-nav-copy{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;overflow-wrap:anywhere}
+.tool-nav-copy strong{font-size:13px;font-weight:600;line-height:1.5}
+.tool-nav-copy small{font-size:11px;line-height:1.5;color:var(--muted,#676158)}
+.workspace-stage .adaptive-tools button[aria-pressed=true]{background:var(--soft,#f5f2eb);border-color:var(--accent,#b27f4e)}
+.workspace-stage button:focus-visible{outline:2px solid var(--accent,#b27f4e);outline-offset:3px}
+.workspace-surface{min-width:0}.workspace-surface .r-grid{display:block}
+.workspace-surface .r-card{padding:24px;border-radius:12px;animation:none}
+.workspace-surface .r-card-header{margin-bottom:8px;flex-wrap:wrap}
+.workspace-surface .r-card-header h3{font-size:21px;line-height:1.4;overflow-wrap:anywhere}
+.workspace-surface .r-kind{text-transform:none;letter-spacing:0;font-size:11px}
+.r-purpose{font-size:13px;line-height:1.7;color:var(--muted,#676158);margin:0 0 24px;overflow-wrap:anywhere}
+.workspace-empty{padding:24px;border:1px solid var(--line);border-radius:12px;line-height:1.6}
+.supporting-tools.general>summary{display:none}
+.demo-conversation .demo-result-heading{border:0;margin-top:20px;padding:0}
+.demo-transcript{margin-top:28px;border:1px solid var(--line);border-radius:12px;padding:16px}
+.demo-transcript>summary{cursor:pointer;font-size:14px;font-weight:600;line-height:1.6}
+.demo-transcript .demo-messages{margin-bottom:0}
+@media(max-width:900px){.workspace-stage{grid-template-columns:1fr;gap:16px}.workspace-stage .adaptive-overview{position:static}.workspace-stage .adaptive-summary{padding:12px 16px}.workspace-stage .adaptive-next{flex-direction:row;align-items:center;justify-content:space-between}.workspace-stage .adaptive-next>div{min-width:0}.workspace-stage .adaptive-next button{flex-shrink:0;max-width:45%}.workspace-stage .adaptive-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-stage .adaptive-tools button{height:100%}.workspace-surface .r-card{padding:18px}}
+@media(max-width:400px){.workspace-stage .adaptive-tools{grid-template-columns:1fr}.workspace-stage .adaptive-next{flex-direction:column;align-items:stretch}.workspace-stage .adaptive-next button{max-width:none}.workspace-surface .r-card{padding:14px}.workspace-surface .r-card-header h3{font-size:18px}.workspace-surface .r-flashcards{grid-template-columns:1fr}}
+.workspace-stage .adaptive-tools{max-height:60dvh;overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:900px){.workspace-stage .adaptive-tools{max-height:220px}}
