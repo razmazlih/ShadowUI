@@ -10,6 +10,7 @@ export const ComponentDefinitionSchema=z.object({
  categories:z.array(z.string().max(80)).max(12),tags:z.array(z.string().max(80)).max(30),
  capabilities:z.array(z.string().min(1).max(100)).min(1).max(30),actions:z.array(z.string().min(1).max(100)).min(1).max(30),limitations:z.array(z.string().max(500)).max(20),
  inputSchema:MetadataSchema,outputSchema:MetadataSchema,stateSchema:MetadataSchema,template:ComponentSchema,
+ capabilityBindings:z.array(z.object({capability:z.string().min(1).max(100),primitiveCapability:z.string().min(1).max(100)}).strict()).max(30).optional(),
  examples:z.array(z.string().max(1000)).max(8),nonFitExamples:z.array(z.string().max(1000)).max(8),
  source:z.enum(['seed','ai','admin']),status:z.enum(['draft','active','retired']),scope:z.enum(['shared','private']),ownerSession:z.string().min(1).max(128).optional(),
  support:z.object({hebrew:z.boolean(),rtl:z.boolean(),mobile:z.boolean(),accessibility:z.boolean()}).strict(),
@@ -22,6 +23,9 @@ export const ComponentDefinitionSchema=z.object({
 export type ComponentDefinition=z.infer<typeof ComponentDefinitionSchema>;
 export const CatalogRevisionSchema=z.object({definition:ComponentDefinitionSchema,validation:z.object({valid:z.boolean(),errors:z.array(z.string())}),changedAt:z.string().datetime()}).strict();
 export type CatalogRevision=z.infer<typeof CatalogRevisionSchema>;
+
+const primitiveCapabilityMap:Record<UIComponent['type'],string[]>={checklist:['tasks.check','task_tracking','checklist'],timeline:['timeline.edit','milestones','timeline'],calendar:['schedule.events.edit','dated_events','calendar'],weekly_schedule:['schedule.events.edit','weekly_schedule','time_blocks'],kanban:['tasks.organize','workflow','kanban'],table:['data.table.edit','structured_data','table','sum'],comparison:['compare.options','comparison','weighted_ranking'],notes:['notes.edit','write','notes'],timer:['time.track','focus','timer'],chart:['data.chart','numeric_visualization','chart'],slider:['input.range','numeric_constraint','budget'],approval:['decision.approve','local_approval'],custom:['calculate.formula','calculate','formula','input.form'],flashcards:['study.flashcards','flashcards'],quiz:['study.quiz','quiz'],links:['links.open','links']};
+export function primitiveCapabilities(type:UIComponent['type']):string[]{return [...primitiveCapabilityMap[type]];}
 
 /** Behavior probes run without executing generated JavaScript or performing external actions. */
 export function validateDefinition(input:unknown):{valid:boolean;errors:string[]}{
@@ -38,8 +42,15 @@ export function validateDefinition(input:unknown):{valid:boolean;errors:string[]
  if(c.type==='weekly_schedule'&&(!c.weeklySchedule||c.weeklySchedule.days.length!==7))errors.push('Weekly schedule requires seven dated days');
  if(c.type==='quiz'&&(!c.items.length||c.items.some(item=>!item.answer||!item.options?.includes(item.answer))))errors.push('Quiz requires answerable questions');
  if(c.type==='custom'&&!c.custom?.fields.length)errors.push('A generated tool needs real inputs');
- const supported:Record<UIComponent['type'],string[]>={checklist:['tasks.check','task_tracking','checklist'],timeline:['timeline.edit','milestones','timeline'],calendar:['schedule.events.edit','dated_events','calendar'],weekly_schedule:['schedule.events.edit','weekly_schedule','time_blocks'],kanban:['tasks.organize','workflow','kanban'],table:['data.table.edit','structured_data','table','sum'],comparison:['compare.options','comparison','weighted_ranking'],notes:['notes.edit','write','notes'],timer:['time.track','focus','timer'],chart:['data.chart','numeric_visualization','chart'],slider:['input.range','numeric_constraint','budget'],approval:['decision.approve','local_approval'],custom:['calculate.formula','calculate','formula','input.form'],flashcards:['study.flashcards','flashcards'],quiz:['study.quiz','quiz'],links:['links.open','links']};
- for(const capability of d.capabilities)if(!supported[c.type].includes(capability)&&!(c.type==='custom'&&/^(?:calculate|collect)\.[a-z][a-z0-9_]{0,63}$/.test(capability)))errors.push(`Primitive ${c.type} cannot provide capability ${capability}`);
+ const supported=primitiveCapabilityMap;
+ const bindings=d.capabilityBindings??[];
+ if(new Set(bindings.map(binding=>binding.capability)).size!==bindings.length)errors.push('Duplicate capability bindings');
+ for(const binding of bindings){
+  if(d.source!=='ai'||!d.capabilities.includes(binding.capability)||!supported[c.type].includes(binding.primitiveCapability)||!d.capabilities.includes(binding.primitiveCapability))errors.push('Capability binding requires a supported declared primitive behavior');
+  if(c.type==='custom'&&binding.primitiveCapability==='calculate.formula'&&!c.custom?.outputs.length)errors.push('Calculation binding requires working outputs');
+ }
+
+ for(const capability of d.capabilities)if(!supported[c.type].includes(capability)&&!bindings.some(binding=>binding.capability===capability&&supported[c.type].includes(binding.primitiveCapability))&&!(c.type==='custom'&&/^(?:calculate|collect)\.[a-z][a-z0-9_]{0,63}$/.test(capability)))errors.push(`Primitive ${c.type} cannot provide capability ${capability}`);
  if(c.type==='custom'&&d.capabilities.some(capability=>capability.startsWith('calculate.')||['calculate','formula'].includes(capability))&&!c.custom?.outputs.length)errors.push('Formula capability requires working outputs');
  if(d.capabilities.some(capability=>/external|send|purchase|booking|deploy/.test(capability)))errors.push('External execution capabilities are unavailable');
  return {valid:!errors.length,errors};

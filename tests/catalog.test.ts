@@ -16,3 +16,12 @@ test('capability spoof and broken default formulas cannot activate',()=>{
 test('private definitions require ownership and shared definitions cannot retain owners',()=>{
  const definition=seedDefinitions()[0];assert.equal(ComponentDefinitionSchema.safeParse({...definition,scope:'private'}).success,false);assert.equal(ComponentDefinitionSchema.safeParse({...definition,ownerSession:'someone'}).success,false);
 });
+
+test('generated purpose-specific definitions require a declared renderer behavior',()=>{
+ const base=seedDefinitions().find(d=>d.id==='table')!;
+ const generated={...base,id:'generated_inventory',source:'ai' as const,scope:'private' as const,ownerSession:'synthetic-session',capabilities:['inventory.track','data.table.edit'],actions:['inventory.track','data.table.edit'],capabilityBindings:[{capability:'inventory.track',primitiveCapability:'data.table.edit'}]};
+ assert.equal(validateDefinition(generated).valid,true);
+ assert.equal(validateDefinition({...generated,capabilityBindings:[]}).valid,false);
+ assert.equal(validateDefinition({...generated,capabilityBindings:[{capability:'inventory.track',primitiveCapability:'calculate.formula'}]}).valid,false);
+ assert.equal(validateDefinition({...generated,source:'seed'}).valid,false);
+});

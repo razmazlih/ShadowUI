@@ -121,3 +121,18 @@ test('a contract cannot ask a second blocking clarification',async()=>{
  const result=await runTaskPipeline('Use empty inputs',undefined,session,[{role:'assistant',content:'What should be included?'}],h.deps);
  assert.equal(result.operation,'create');assert.equal(result.contract?.clarification,undefined);
 });
+
+test('catalog gaps automatically create and privately persist complementary interactive definitions',async()=>{
+ const notes=component('notes'),table=component('table');notes.id='brief';notes.title='תכנון מסמך';notes.reason='Editable project brief';notes.text='Private supplied text';table.id='inventory';table.title='מלאי פרטי';table.reason='Editable inventory rows';table.items=[{id:'secret',label:'Private stock'}];
+ const contract=demoTaskContract('Create project brief and inventory',[notes,table]);contract.actions[0].capability='notes.project_brief';contract.actions[0].inputKind='text';contract.actions[1].capability='inventory.track';contract.actions[1].inputKind='items';
+ const h=harness(contract,[notes,table]);const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.ok('workspace' in result&&result.workspace);assert.equal(result.coverage?.complete,true);assert.equal(h.calls.populate,1);assert.equal(h.saved.length,2);assert.equal(result.workspace.components.length,2);
+ assert.equal(result.workspace.components.find(c=>c.type==='notes')!.text,'Private supplied text');
+ assert.ok(h.saved.every(d=>d.scope==='private'&&d.version===2));assert.ok(h.saved.every(d=>d.template.items.length===0));assert.equal(h.saved.find(d=>d.template.type==='notes')!.template.text,'');
+ const again=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);assert.equal(again.coverage?.complete,true);assert.equal(h.saved.length,2);
+});
+
+test('missing local renderer is repaired once and cannot be reported as a completed workspace',async()=>{
+ const c=component('notes'),contract=demoTaskContract('Build a dated editor',[c]);contract.actions[0].capability='schedule.special_week';contract.actions[0].inputKind='schedule';const h=harness(contract,[c]);
+ await assert.rejects(runTaskPipeline(contract.objective,undefined,session,[],h.deps),/after one repair/);assert.equal(h.calls.populate,2);assert.equal(h.saved.length,0);
+});

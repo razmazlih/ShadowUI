@@ -3,7 +3,7 @@ import {z} from 'zod';
 import {TaskContractSchema,type TaskContract} from './task-contract';
 import {assembleTask,rankTaskCandidates,demoTaskContract,type TaskAssembly} from './task-engine';
 import {validateTaskInstances} from './task-instance-validation';
-import {ComponentDefinitionSchema,validateDefinition,primitiveInputSchema,primitiveStateSchema,outputSchema,seedDefinitions,type ComponentDefinition} from './catalog';
+import {ComponentDefinitionSchema,validateDefinition,primitiveInputSchema,primitiveStateSchema,outputSchema,seedDefinitions,primitiveCapabilities,type ComponentDefinition} from './catalog';
 import {listDefinitions,getDefinition,saveGeneratedDefinition,getCatalogEmbeddingCache,setCatalogEmbeddingCache} from './catalog-store';
 import {semanticScores,type EmbeddingCache} from './semantic-search';
 import {interpretTask,populateTask} from './task-ai';
@@ -19,7 +19,7 @@ const cache:EmbeddingCache={
  async get(key){const vector=await getCatalogEmbeddingCache(key);return vector?{model:'text-embedding-3-small',fingerprint:key.split(':').at(-1)!,vector}:null;},
  async put(key,record){await setCatalogEmbeddingCache(key,record.vector);}
 };
-function formulaSignature(component:UIComponent){return JSON.stringify({type:component.type,fields:component.custom?.fields.map(({value:_,...field})=>field),outputs:component.custom?.outputs});}
+function formulaSignature(component:UIComponent){return JSON.stringify({type:component.type,purpose:component.type==='custom'?undefined:component.title,fields:component.custom?.fields.map(({value:_,...field})=>field),outputs:component.custom?.outputs});}
 function privateDefinition(component:UIComponent,contract:TaskContract,session:string,missing:string[]):ComponentDefinition{
  const stamp=new Date().toISOString();
  const template=structuredClone(component);delete template.catalogRef;delete template.editedPaths;delete template.dependsOn;delete template.visibleWhen;
@@ -33,8 +33,11 @@ function privateDefinition(component:UIComponent,contract:TaskContract,session:s
    if(evaluateCustomTool(template.custom).every(output=>!output.error))break;
   }
  }
+ if(template.type!=='custom'){template.items=[];if(template.text!==undefined)template.text='';if(template.value!==undefined)template.value=0;if(template.weeklySchedule)template.weeklySchedule.days.forEach(day=>day.events=[]);if(template.type==='quiz')template.items=structuredClone(seedDefinitions().find(d=>d.template.type==='quiz')!.template.items);if(template.type==='comparison')template.items=[{id:'option_a',label:'אפשרות א',scores:Object.fromEntries((template.criteria??[]).map(c=>[c.id,0]))},{id:'option_b',label:'אפשרות ב',scores:Object.fromEntries((template.criteria??[]).map(c=>[c.id,0]))}];}
+ const canonical=template.type==='custom'&&!template.custom?.outputs.length?'input.form':primitiveCapabilities(template.type)[0];
+ const aliases=missing.filter(c=>!primitiveCapabilities(template.type).includes(c)&&!(/^(calculate|collect)\./.test(c)&&template.type==='custom'));
  const id=`generated_${createHash('sha256').update(session+JSON.stringify([...missing].sort())+formulaSignature(template)).digest('hex').slice(0,32)}`;
- return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative calculation',categories:[missing.every(c=>c.startsWith('collect.'))?'forms':'calculation'],tags:['custom'],capabilities:missing,actions:missing,limitations:['Local deterministic calculation only; provisional inputs must be entered by the user.'],inputSchema:primitiveInputSchema('custom'),outputSchema:outputSchema('custom'),stateSchema:primitiveStateSchema('custom'),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
+ return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative workspace tool',categories:[template.type],tags:[template.type],capabilities:[...new Set([...missing,canonical])],actions:[...new Set([...missing,canonical])],capabilityBindings:aliases.map(capability=>({capability,primitiveCapability:canonical})),limitations:['Local interactive workspace only; user inputs remain editable. No external actions are executed.'],inputSchema:primitiveInputSchema(template.type),outputSchema:outputSchema(template.type),stateSchema:primitiveStateSchema(template.type),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
 }
 function attachPins(assembly:TaskAssembly){
  return assembly.components.map(component=>{const selection=assembly.selections.find(s=>s.instanceId===component.id)!;return {...component,catalogRef:{definitionId:selection.definitionId,version:selection.definitionVersion}};});
@@ -78,7 +81,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  const eligible=ranked.map(candidate=>candidate.definition);
  const scores=eligible.length?await deps.semantics(contract.objective,eligible,session,cache):{};
  let assembly=assembleTask(contract,definitions,{semanticScores:scores});
- const canGenerate=assembly.coverage.missing.some(m=>/^(?:calculate|collect)\./.test(m.capability)&&!contract.actions.find(a=>a.id===m.actionId)?.external);
+ const canGenerate=assembly.coverage.missing.some(m=>!contract.actions.find(a=>a.id===m.actionId)?.external);
  if(!assembly.components.length&&!canGenerate)return {operation:'reply',intent:'workspace_question',explanation:assembly.limitations.join(' '),contract,coverage:assembly.coverage,mode:'live' as const,budget:interpretation.budget};
  const chosen=assembly.selections.map(s=>definitions.find(d=>d.id===s.definitionId&&d.version===s.definitionVersion)!);
  let generated:Awaited<ReturnType<PipelineDependencies['populate']>>;
@@ -87,12 +90,23 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  // Exactly one focused repair; persistence is outside the retry so failed drafts are never activated.
  for(let attempt=repairUsed?1:0;attempt<2;attempt++){
   const draft=generated.workspace;
-  let provisional=[...definitions],newDefinition:ComponentDefinition|undefined,next:TaskAssembly|undefined,candidate:Workspace|undefined;
+  let provisional=[...definitions],newDefinitions:ComponentDefinition[]=[],next:TaskAssembly|undefined,candidate:Workspace|undefined;
   try{
-   const custom=draft.components.find(c=>c.type==='custom'&&!chosen.some(d=>d.template.custom&&formulaSignature(d.template)===formulaSignature(c)))??(canGenerate?draft.components.find(c=>c.type==='custom'):undefined);
-   newDefinition=canGenerate&&custom?privateDefinition(custom,contract,session,assembly.coverage.missing.filter(m=>/^(?:calculate|collect)\./.test(m.capability)).map(m=>m.capability)):undefined;
-   if(newDefinition){const validation=validateDefinition(newDefinition);if(!validation.valid)throw new Error(`Generated definition: ${validation.errors.join('; ')}`);provisional.push({...newDefinition,status:'active'});}
+   const unused=draft.components.filter(c=>!chosen.some(d=>d.template.type===c.type&&(c.type!=='custom'||formulaSignature(d.template)===formulaSignature(c))));
+   for(const missing of assembly.coverage.missing){
+    const action=contract.actions.find(a=>a.id===missing.actionId)!;if(action.external)continue;
+    if(/(?:^|[._-])(?:export|import|convert|search|fetch|browse|upload|download|run|execute|code|send|pay|purchase|book|deploy)(?:[._-]|$)/i.test(action.capability))throw new Error(`No validated local executor for ${action.capability}`);
+    const kinds:Record<string,UIComponent['type'][]>= {custom:['custom'],schedule:['weekly_schedule'],comparison:['comparison'],number:['custom','slider','timer','chart'],text:['notes','custom'],items:['table','checklist','kanban','timeline','calendar','flashcards','quiz','chart','links','approval']};
+    const compatible=(c:UIComponent)=>(!action.inputKind||kinds[action.inputKind]?.includes(c.type))&&(!action.capability.startsWith('calculate.')||c.type==='custom');
+    const component=unused.find(c=>c.id===action.id&&compatible(c))??unused.find(compatible);
+    if(!component)throw new Error(`Generate an actual interactive component for ${action.id}: ${action.description}`);
+    unused.splice(unused.indexOf(component),1);
+    const definition=privateDefinition(component,contract,session,[missing.capability]);
+    const validation=validateDefinition(definition);if(!validation.valid)throw new Error(`Generated definition: ${validation.errors.join('; ')}`);
+    newDefinitions.push(definition);provisional.push({...definition,status:'active'});
+   }
    next=assembleTask(contract,provisional,{semanticScores:scores,componentData:draft.components});
+   if(next.coverage.missing.some(m=>!contract.actions.find(a=>a.id===m.actionId)?.external))throw new Error('Generated components must cover every local task action');
    // Keep trusted formulas and renderer types. AI supplies instance data, never replaces a catalog algorithm.
    next.components=next.components.map(component=>{const selection=next!.selections.find(s=>s.instanceId===component.id)!;const definition=provisional.find(d=>d.id===selection.definitionId&&d.version===selection.definitionVersion)!;
     if(definition.template.custom&&component.custom){const values=new Map(component.custom.fields.map(f=>[f.id,f.value]));component.custom={...structuredClone(definition.template.custom),fields:definition.template.custom.fields.map(f=>({...f,value:values.get(f.id)??f.value}))};}return component;});
@@ -117,7 +131,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
    throw new AIError(422,`Task validation failed after one repair: ${message}`);
   }
   // Persist only after instance behavior, preserved edits, and all data edges pass.
-  if(newDefinition){const existing=await deps.get(newDefinition.id,undefined,{session});const stored=existing??(await deps.saveGenerated(newDefinition,session)).definition;if(stored.status!=='active')throw new AIError(422,'Generated component remained an invalid draft.');const selection=next!.selections.find(s=>s.definitionId===stored.id);if(selection){selection.definitionVersion=stored.version;next!.components=next!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);candidate!.components=candidate!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);}}
+  for(const newDefinition of newDefinitions){const existing=await deps.get(newDefinition.id,undefined,{session});const stored=existing??(await deps.saveGenerated(newDefinition,session)).definition;if(stored.status!=='active')throw new AIError(422,'Generated component remained an invalid draft.');const selection=next!.selections.find(s=>s.definitionId===stored.id);if(selection){selection.definitionVersion=stored.version;next!.components=next!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);candidate!.components=candidate!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);}}
   final=candidate!;
   if(!previous&&isSchedulingGoal(prompt))final.domain={kind:'schedule',id:crypto.randomUUID()};
   assembly=next!;break;

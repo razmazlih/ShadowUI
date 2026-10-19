@@ -51,3 +51,9 @@ Use `OPENAI_API_KEY=''` on the local server when running mocked browser tests to
 ## Hosted acceptance evidence
 
 The Preview is separate from production. The hosted catalog was read from Firestore and its quantity × unit-value preview returned 21 for inputs 3 and 7. A live request also exposed an invalid task-contract response; task interpretation now uses strict provider JSON-schema output, with a nullable provider adapter and one shared repair allowance across interpretation/population/behavior. Regression tests cover schema failures, references, cycles and the repair cap. See `docs/evidence/task-catalog-verification.json` for the final verification record.
+
+### Automatic generation for catalog gaps
+
+Missing local actions now trigger purpose-specific declarative component generation, including complementary tables, documents, boards, comparisons and forms/calculators. Generated capability aliases bind explicitly to supported renderer behavior. Schemas, input kinds, formula behavior, bindings and complete local action coverage must pass before the private definition is persisted and used. One focused repair is allowed; unsupported execution never becomes a successful editor merely by renaming it. User values remain in instances; reusable templates are sanitized. Private definitions are saved as drafts, validated, activated at a pinned revision and reused by the same session.
+
+Verification: 145 unit tests passed (2 emulator-only skipped); all 7 emulator tests passed. A synthetic-provider inventory task also created and reused the same version-2 definition in real Firestore without any paid AI call. This check verifies cloud persistence, not live model quality for arbitrary tasks.
