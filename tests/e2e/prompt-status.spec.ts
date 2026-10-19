@@ -1,0 +1,31 @@
+import {test,expect} from '@playwright/test';
+import {planDemo} from '../../lib/planner';
+
+test('prompt shows pending, completion and failure beside the input',async({page})=>{
+ let finish:()=>void=()=>{};
+ let fail=false;
+ await page.route('**/api/plan',async route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true}});
+  await new Promise<void>(resolve=>{finish=resolve});
+  if(fail)return route.fulfill({status:500,json:{error:'Provider unavailable'}});
+  return route.fulfill({json:{...planDemo('Help me study biology'),explanation:'Created your study plan.'}});
+ });
+ await page.goto('/');
+ const input=page.getByLabel('What do you want to accomplish?');
+ await input.fill('Help me study biology');
+ await page.getByRole('button',{name:'Build workspace'}).click();
+ await expect(page.locator('#request-status')).toContainText('Processing your request');
+ await expect(input).toBeDisabled();
+ finish();
+ await expect(page.locator('#request-status')).toContainText('Response ready');
+ await expect(page.locator('#request-status')).toContainText('Created your study plan.');
+ await expect(input).toBeEnabled();
+ fail=true;
+ await input.fill('עזור לי ללמוד');
+ await page.getByRole('button',{name:'Build workspace'}).click();
+ await expect(page.locator('#request-status')).toContainText('מעבד את הבקשה');
+ finish();
+ await expect(page.locator('#request-status')).toContainText('הבקשה נכשלה');
+ await expect(page.locator('.error[role=alert]')).toContainText('Provider unavailable');
+ await expect(input).toHaveValue('עזור לי ללמוד');
+});
