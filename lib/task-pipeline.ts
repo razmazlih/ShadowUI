@@ -55,14 +55,16 @@ export type PipelineDependencies={
  list:typeof listDefinitions; get:typeof getDefinition; saveGenerated:typeof saveGeneratedDefinition;
  interpret:typeof interpretTask; populate:(contract:TaskContract,definitions:ComponentDefinition[],current:Workspace|undefined,session:string,feedback?:string)=>Promise<{workspace:Workspace;budget:{spent:number;limit:number;warning:boolean};cached:boolean}>; semantics:typeof semanticScores;
 };
+export type PipelineProgress='interpret'|'assemble'|'compose'|'validate'|'save'|'complete';
 const defaults:PipelineDependencies={list:listDefinitions,get:getDefinition,saveGenerated:saveGeneratedDefinition,interpret:interpretTask,populate:populateTask,semantics:semanticScores};
-export async function runTaskPipeline(prompt:string,current:Workspace|undefined,session:string,history:unknown[]=[],overrides:Partial<PipelineDependencies>={}){
+export async function runTaskPipeline(prompt:string,current:Workspace|undefined,session:string,history:unknown[]=[],overrides:Partial<PipelineDependencies>={},onProgress?:(step:PipelineProgress)=>void){
  const deps={...defaults,...overrides};
  // History is persisted by the client even before a workspace exists. Once the
  // assistant has replied, clarification cannot block this conversation again.
  const clarificationUsed=history.some(turn=>!!turn&&typeof turn==='object'&&(turn as {role?:string}).role==='assistant');
  const guidance=clarificationUsed?'The clarification allowance is exhausted. Do not ask any more questions. Interpret the original request plus the latest answer as workspace_change with a complete contract and clarification:null. Proceed with editable missing inputs and explicit assumptions.':'';
  let repairUsed=false,interpretation:Awaited<ReturnType<typeof interpretTask>>;
+ onProgress?.('interpret');
  try{interpretation=await deps.interpret(prompt,current,session,history,guidance);}catch(error){if(!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;interpretation=await deps.interpret(prompt,current,session,history,guidance+' The previous task contract failed validation. Correct only its schema/references: '+error.sourceError.message.slice(0,2500));}
  if(clarificationUsed&&(interpretation.intent==='clarification'||interpretation.contract?.clarification)){
   const messages=history.filter((turn):turn is {role:string;content:string}=>!!turn&&typeof turn==='object'&&(turn as {role?:string}).role==='user'&&typeof (turn as {content?:string}).content==='string');
@@ -75,6 +77,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  if(contract.clarification)return {operation:'reply',intent:'clarification',explanation:contract.clarification,contract,mode:'live' as const,budget:interpretation.budget};
  const patch=!!current&&!isNewGoal(prompt,current);
  const previous=patch?current:undefined;
+ onProgress?.('assemble');
  let definitions=await deps.list({session});
  // Historical pins remain readable and are used instead of automatically upgrading instances.
  if(previous){const restored=new Set<string>(),removedHeads=new Set<string>();for(const component of previous.components){if(!component.catalogRef)continue;const pin=component.catalogRef,key=`${pin.definitionId}@${pin.version}`;if(restored.has(key))continue;const pinned=await deps.get(pin.definitionId,pin.version,{session});if(pinned){if(!removedHeads.has(pinned.id)){definitions=definitions.filter(d=>d.id!==pinned.id);removedHeads.add(pinned.id);}definitions.push({...pinned,status:'active'});restored.add(key);}}}
@@ -86,8 +89,10 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  if(!assembly.components.length&&!canGenerate)return {operation:'reply',intent:'workspace_question',explanation:assembly.limitations.join(' '),contract,coverage:assembly.coverage,mode:'live' as const,budget:interpretation.budget};
  const chosen=assembly.selections.map(s=>definitions.find(d=>d.id===s.definitionId&&d.version===s.definitionVersion)!);
  let generated:Awaited<ReturnType<PipelineDependencies['populate']>>;
+ onProgress?.('compose');
  try{generated=await deps.populate(contract,chosen,previous,session);}catch(error){if(repairUsed||!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;generated=await deps.populate(contract,chosen,previous,session,'Repair the invalid JSON/schema from the previous response; return the required structured workspace and bindings only.');}
  let final:Workspace|undefined,report:ReturnType<typeof validateTaskInstances>|undefined;
+ onProgress?.('validate');
  // Exactly one focused repair; persistence is outside the retry so failed drafts are never activated.
  for(let attempt=repairUsed?1:0;attempt<2;attempt++){
   const draft=generated.workspace;
@@ -133,6 +138,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
    throw new AIError(422,`Task validation failed after one repair: ${message}`);
   }
   // Persist only after instance behavior, preserved edits, and all data edges pass.
+  onProgress?.('save');
   for(const newDefinition of newDefinitions){const existing=await deps.get(newDefinition.id,undefined,{session});const stored=existing??(await deps.saveGenerated(newDefinition,session)).definition;if(stored.status!=='active')throw new AIError(422,'Generated component remained an invalid draft.');const selection=next!.selections.find(s=>s.definitionId===stored.id);if(selection){selection.definitionVersion=stored.version;next!.components=next!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);candidate!.components=candidate!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);}}
   final=candidate!;
   if(!previous&&isSchedulingGoal(prompt))final.domain={kind:'schedule',id:crypto.randomUUID()};
@@ -140,5 +146,6 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  }
  if(!final)throw new AIError(422,'No validated workspace was produced.');
  const explanation=final.domain&&!previous?summarizeScheduleDraft(createSchedule(final.domain.id,prompt)):interpretation.reply;
+ onProgress?.('complete');
  return {workspace:final,operation:previous?'patch':'create',intent:'workspace_change',mode:'live' as const,explanation,contract,selections:assembly.selections,coverage:assembly.coverage,validation:report,budget:generated.budget};
 }

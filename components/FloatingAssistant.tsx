@@ -1,10 +1,20 @@
 'use client';
 
 import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {MessageCircle,Minimize2,Maximize2,ChevronDown,Sparkles} from 'lucide-react';
+import {MessageCircle,Minimize2,Maximize2,ChevronDown,Sparkles,Check} from 'lucide-react';
 
 type Turn={role:'user'|'assistant';content:string};
-export default function FloatingAssistant({history,composer,he,busy,error,onRetry}:{history:Turn[];composer:ReactNode;he:boolean;busy:boolean;error:string;onRetry:()=>void}){
+type Phase='interpret'|'assemble'|'compose'|'validate'|'save'|'complete'|null;
+const phases=['interpret','assemble','compose','validate','save'] as const;
+const phaseCopy={
+ interpret:{he:'מבין את הבקשה',en:'Understanding your request',detailHe:'מזהה את המטרה והפרטים שצריך לשמור.',detailEn:'Identifying the goal and the details it needs.'},
+ assemble:{he:'בוחר רכיבים',en:'Choosing workspace tools',detailHe:'מחפש רכיבים שמתאימים לפעולות שביקשת.',detailEn:'Finding tools that match the actions you asked for.'},
+ compose:{he:'בונה את סביבת העבודה',en:'Building your workspace',detailHe:'ה־AI מרכיב ממשק ונתונים לעריכה.',detailEn:'The AI is shaping an editable interface and its data.'},
+ validate:{he:'בודק את התוצאה',en:'Checking the result',detailHe:'מוודא שהרכיבים והחיבורים תקינים.',detailEn:'Checking that the tools and their connections work.'},
+ save:{he:'שומר את הרכיבים',en:'Saving the tools',detailHe:'שומר רכיבים חדשים אחרי שהבדיקות עברו.',detailEn:'Saving any new tools after validation.'},
+ complete:{he:'מוכן',en:'Ready',detailHe:'סביבת העבודה הוכנה.',detailEn:'The workspace is ready.'}
+};
+export default function FloatingAssistant({history,composer,he,busy,error,onRetry,phase}:{history:Turn[];composer:ReactNode;he:boolean;busy:boolean;error:string;onRetry:()=>void;phase:Phase}){
  const [size,setSize]=useState<'mini'|'compact'|'expanded'>('compact');
  const end=useRef<HTMLDivElement>(null);
  const root=useRef<HTMLDivElement>(null);
@@ -28,7 +38,10 @@ export default function FloatingAssistant({history,composer,he,busy,error,onRetr
    <div className="assistant-messages" role="log" aria-label={he?'היסטוריית שיחה':'Conversation history'} aria-live="polite" aria-relevant="additions">
     {!history.length&&<div className="assistant-empty"><MessageCircle size={25}/><strong>{he?'מה נעשה עכשיו?':'What shall we do next?'}</strong><p>{he?'אפשר לבקש שינוי בסביבת העבודה או להמשיך מאיפה שעצרתם. השיחה תופיע כאן.':'Ask for a change or pick up where you left off. Your conversation will appear here.'}</p></div>}
     {history.map((turn,index)=><div key={index} className={`assistant-message from-${turn.role}`}><strong dir={turn.role==='assistant'?'ltr':undefined}>{turn.role==='user'?(he?'אתם':'You'):'ShadowUI'}</strong><p dir="auto">{turn.content}</p></div>)}
-    {busy&&<p className="assistant-thinking" role="status"><span className="spinner"/>{he?'מעבד את הבקשה…':'Processing your request…'}</p>}<div ref={end}/>
+    {busy&&<div className="assistant-activity" role="status" aria-live="polite">
+     <div className="assistant-activity-heading"><span className="assistant-activity-orb"><Sparkles size={15}/></span><div><strong>{phase?phaseCopy[phase][he?'he':'en']:(he?'עובד על הבקשה…':'Working on your request…')}</strong><small>{phase?phaseCopy[phase][he?'detailHe':'detailEn']:(he?'ממתין לעדכון מהשרת.':'Waiting for the server update.')}</small></div><span className="spinner" aria-hidden="true"/></div>
+     {phase&&<ol className="assistant-phases">{phases.map((step,index)=>{const current=phase==='complete'?phases.length:phases.indexOf(phase as typeof phases[number]);const done=index<current;return <li key={step} className={index===current?'is-current':done?'is-done':''} aria-current={index===current?'step':undefined}><span className="assistant-phase-marker">{done?<Check size={11}/>:String(index+1).padStart(2,'0')}</span><span>{phaseCopy[step][he?'he':'en']}</span></li>})}</ol>}
+    </div>}<div ref={end}/>
    </div>
    {error&&<div className="assistant-error" role="alert"><span>{error}</span><button type="button" disabled={busy} onClick={onRetry}>{he?'ניסיון נוסף':'Retry'}</button></div>}
    <div className="assistant-composer">{composer}</div>
