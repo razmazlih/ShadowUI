@@ -62,7 +62,7 @@ export async function livePlan(prompt:string,current:Workspace|undefined,session
   const workspace=validateWorkspaceFit(parseAIWorkspace(data),prompt);
   if(patch&&current){workspace.goal=current.goal;if(current.domain)workspace.domain=current.domain;}else {workspace.goal=prompt;delete workspace.domain;if(isSchedulingGoal(prompt))workspace.domain={kind:'schedule',id:crypto.randomUUID()};}
   return {workspace:patch&&current?applyCandidate(current,workspace):workspace,mode:'live',operation:patch?'patch':'create',explanation:`OpenAI ${modelConfig.model} generated and validated this workspace. Component calculations and schedule actions run locally.`} as PlanResult;
- },6000,workspaceResponseFormat,modelConfig));
+ },12000,workspaceResponseFormat,modelConfig));
 }
 const IntentSchema=z.object({operation:OperationSchema.nullable(),explanation:z.string().min(1).max(1000)}).strict();
 export async function liveScheduleIntent(prompt:string,schedule:Schedule,session:string){
@@ -99,5 +99,5 @@ Continue the existing conversation in recentConversation, including after a page
  const output=patch&&current?applyCandidate(current,workspace):workspace;
  const explanation=output.domain?.kind==='schedule'&&!patch?summarizeScheduleDraft(createSchedule(output.domain.id,prompt)):result.reply;
  return {workspace:output,operation:patch?'patch':'create',intent:result.intent,explanation,mode:'live' as const};
- },6000,interactionResponseFormat));
+ },12000,interactionResponseFormat));
 }
