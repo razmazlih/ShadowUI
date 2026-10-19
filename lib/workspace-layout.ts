@@ -16,7 +16,7 @@ export function automaticLayout(components: UIComponent[], availableWidth = Infi
   const order = components.map(component => component.id);
   for (const component of components) {
     let columns = 6;
-    if (['calendar', 'kanban', 'table', 'comparison'].includes(component.type) || (component.type === 'timeline' && component.span === 'wide')) columns = 12;
+    if (['calendar', 'weekly_schedule', 'kanban', 'table', 'comparison'].includes(component.type) || (component.type === 'timeline' && component.span === 'wide')) columns = 12;
     else if (component.type === 'notes') columns = 8;
     else if (['checklist', 'slider', 'timer', 'approval'].includes(component.type)) columns = 4;
     if (availableWidth < 680) columns = 12;
@@ -105,7 +105,7 @@ export function isLayoutRequest(prompt: string): boolean {
  * Tool objects and their editable data are never changed.
  */
 export function requestedLayout(components: UIComponent[], availableWidth = Infinity): LayoutState {
-  const priority = (component: UIComponent) => ['timeline', 'calendar', 'kanban'].includes(component.type) ? 0 : ['table', 'comparison'].includes(component.type) ? 1 : 2;
+  const priority = (component: UIComponent) => ['timeline', 'calendar', 'weekly_schedule', 'kanban'].includes(component.type) ? 0 : ['table', 'comparison'].includes(component.type) ? 1 : 2;
   const ordered = components.map((component, index) => ({ component, index }))
     .sort((a, b) => priority(a.component) - priority(b.component) || a.index - b.index)
     .map(entry => entry.component);
