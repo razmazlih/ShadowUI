@@ -5,7 +5,10 @@ import {applyCandidate} from '@/lib/patch';
 
 import {ScheduleSchema} from '@/lib/schedule';
 import {classifyMessage,MessageHistorySchema} from '@/lib/message-intent';
-import {liveScheduleIntent,liveInteraction} from '@/lib/openai-planner';
+import {liveScheduleIntent} from '@/lib/openai-planner';
+import {runTaskPipeline} from '@/lib/task-pipeline';
+import {assembleTask,demoTaskContract} from '@/lib/task-engine';
+import {listDefinitions} from '@/lib/catalog-store';
 import {AIError,limit,transact} from '@/lib/ai-budget';
 export const runtime='nodejs';
 export const maxDuration=300;
@@ -24,6 +27,6 @@ export async function POST(request:Request){
  const session=sessionId(request);
  if(input.mode==='live'&&(!session||!sameOrigin(request)))return Response.json({error:'Refresh this page before using Live AI. Cross-origin AI requests are blocked.'},{status:403});
  if(input.schedule){if(input.mode!=='live')return Response.json({error:'Natural-language schedule proposals require Live AI; Demo controls remain available.'},{status:400});try{return Response.json(await liveScheduleIntent(input.prompt,input.schedule,session!),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e instanceof AIError?e.message:'Could not interpret this schedule request. No change was applied.'},{status:e instanceof AIError?e.status:503});}}
- if(input.mode==='demo'){const intent=classifyMessage(input.prompt,input.current??undefined);if(intent.kind!=='workspace')return Response.json({operation:'reply',intent:intent.kind,explanation:intent.reply,mode:'demo'});const result=planDemo(input.prompt,input.current??undefined);if(result.operation==='patch'&&input.current)result.workspace=applyCandidate(input.current,result.workspace);return Response.json(result);}
- try{return Response.json(await liveInteraction(input.prompt,input.current??undefined,session!,input.history),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e instanceof AIError?e.message:'AI service is unavailable. No workspace changes were applied.'},{status:e instanceof AIError?e.status:503,headers:{'Cache-Control':'no-store'}});}
+ if(input.mode==='demo'){try{const intent=classifyMessage(input.prompt,input.current??undefined);if(intent.kind!=='workspace')return Response.json({operation:'reply',intent:intent.kind,explanation:intent.reply,mode:'demo'});const result=planDemo(input.prompt,input.current??undefined);if(result.operation==='patch'&&input.current)result.workspace=applyCandidate(input.current,result.workspace);if(result.workspace&&process.env.FIREBASE_PROJECT_ID){const contract=demoTaskContract(input.prompt,result.workspace.components);const assembled=assembleTask(contract,await listDefinitions({session}),{componentData:result.workspace.components});result.workspace=WorkspaceSchema.parse({...result.workspace,components:assembled.components,taskContract:contract,taskReport:{...assembled.coverage,limitations:assembled.limitations}});}return Response.json(result);}catch{return Response.json({error:'The configured component catalog is unavailable. No workspace changes were saved.'},{status:503});}}
+ try{return Response.json(await runTaskPipeline(input.prompt,input.current??undefined,session!,input.history),{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:e instanceof AIError?e.message:'AI service is unavailable. No workspace changes were applied.'},{status:e instanceof AIError?e.status:503,headers:{'Cache-Control':'no-store'}});}
 }

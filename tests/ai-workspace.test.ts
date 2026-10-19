@@ -5,7 +5,7 @@ import {WorkspaceSchema} from '../lib/schema';
 
 function fixture(){return {workspace:{id:'workspace',title:'Trip',description:'Estimated itinerary',goal:'Plan a trip',components:[{
  id:'plan',type:'checklist',title:'Plan',reason:'Prepare the trip',span:'normal',
- custom:null,criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
+ custom:null,weeklySchedule:null,criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
  items:[{id:'book',label:'Choose dates',url:null,detail:null,value:null,done:null,date:null,group:null,answer:null,options:null,scores:null}]
 }]}};}
 

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {BrowserScheduleStore} from '../lib/browser-schedule-store';
 test('hosted browser demo survives adapter reload, rejects stale writes, previews without mutation and replays confirmation',()=>{
  const records=new Map<string,string>();const storage={getItem:(key:string)=>records.get(key)??null,setItem:(key:string,value:string)=>{records.set(key,value)}};
- let store=new BrowserScheduleStore(storage);store.call('create_schedule',{id:'demo',goal:'Schedule six employees'});
- const operation={type:'set_availability',employeeId:'daniel',date:'2026-10-21',unavailable:true};
+ let store=new BrowserScheduleStore(storage);const initial=store.call('create_schedule',{id:'demo',goal:'Schedule six employees'});
+ const operation={type:'set_availability',employeeId:initial.schedule.shifts[4].employeeId!,date:initial.schedule.shifts[4].date,unavailable:true};
  assert.equal(store.call('preview_schedule_change',{id:'demo',expectedRevision:0,operation}).evaluation.valid,false);
  assert.equal(store.call('inspect_schedule',{id:'demo'}).schedule.revision,0);
  const changed=store.call('update_schedule',{id:'demo',expectedRevision:0,actionId:'availability',operation});

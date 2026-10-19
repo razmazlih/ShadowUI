@@ -1,3 +1,3 @@
 import type { NextConfig } from 'next';
-const config:NextConfig={poweredByHeader:false,devIndicators:false};
+const config:NextConfig={distDir:process.env.SHADOWUI_DIST_DIR??'.next',poweredByHeader:false,devIndicators:false};
 export default config;

@@ -10,3 +10,9 @@ playwright-report
 .vercel
 
 /work/
+
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+.next-*

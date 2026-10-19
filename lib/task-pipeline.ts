@@ -1,0 +1,118 @@
+import {createHash} from 'node:crypto';
+import {z} from 'zod';
+import {TaskContractSchema,type TaskContract} from './task-contract';
+import {assembleTask,rankTaskCandidates,type TaskAssembly} from './task-engine';
+import {validateTaskInstances} from './task-instance-validation';
+import {ComponentDefinitionSchema,validateDefinition,primitiveInputSchema,primitiveStateSchema,outputSchema,type ComponentDefinition} from './catalog';
+import {listDefinitions,getDefinition,saveGeneratedDefinition,getCatalogEmbeddingCache,setCatalogEmbeddingCache} from './catalog-store';
+import {semanticScores,type EmbeddingCache} from './semantic-search';
+import {interpretTask,populateTask} from './task-ai';
+import {WorkspaceSchema,type Workspace,type UIComponent} from './schema';
+import {applyCandidate} from './patch';
+import {evaluateCustomTool} from './custom-tool';
+import {bindingOrder,resolveBindings,type DataBinding} from './data-bindings';
+import {AIError} from './ai-budget';
+import {isNewGoal,isSchedulingGoal} from './planner';
+import {createSchedule,summarizeScheduleDraft} from './schedule';
+
+const cache:EmbeddingCache={
+ async get(key){const vector=await getCatalogEmbeddingCache(key);return vector?{model:'text-embedding-3-small',fingerprint:key.split(':').at(-1)!,vector}:null;},
+ async put(key,record){await setCatalogEmbeddingCache(key,record.vector);}
+};
+function formulaSignature(component:UIComponent){return JSON.stringify({type:component.type,fields:component.custom?.fields.map(({value:_,...field})=>field),outputs:component.custom?.outputs});}
+function privateDefinition(component:UIComponent,contract:TaskContract,session:string,missing:string[]):ComponentDefinition{
+ const stamp=new Date().toISOString();
+ const template=structuredClone(component);delete template.catalogRef;delete template.editedPaths;delete template.dependsOn;delete template.visibleWhen;
+ // Reusable definition never carries the user's populated field values.
+ if(template.custom){
+  const neutral=structuredClone(template.custom),probes=[1,2,0,10];
+  // At most 64 deterministic probes, independent of all private field values.
+  for(let attempt=0;attempt<64;attempt++){
+   let numericIndex=0;
+   template.custom.fields=neutral.fields.map(field=>{const probe=attempt<4?probes[attempt]:probes[Math.floor((attempt-4)/4**(numericIndex++%3))%4];return {...field,value:field.type==='number'?String(Math.max(field.min??-Infinity,Math.min(field.max??Infinity,probe))):field.type==='toggle'?'false':field.type==='select'?(field.options[0]??''):''};});
+   if(evaluateCustomTool(template.custom).every(output=>!output.error))break;
+  }
+ }
+ const id=`generated_${createHash('sha256').update(session+JSON.stringify([...missing].sort())+formulaSignature(template)).digest('hex').slice(0,32)}`;
+ return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative calculation',categories:[missing.every(c=>c.startsWith('collect.'))?'forms':'calculation'],tags:['custom'],capabilities:missing,actions:missing,limitations:['Local deterministic calculation only; provisional inputs must be entered by the user.'],inputSchema:primitiveInputSchema('custom'),outputSchema:outputSchema('custom'),stateSchema:primitiveStateSchema('custom'),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
+}
+function attachPins(assembly:TaskAssembly){
+ return assembly.components.map(component=>{const selection=assembly.selections.find(s=>s.instanceId===component.id)!;return {...component,catalogRef:{definitionId:selection.definitionId,version:selection.definitionVersion}};});
+}
+/** Deterministic glue for compatible data tables and charts; all other edges remain explicit. */
+export function inferredBindings(components:UIComponent[],current?:Workspace):DataBinding[]{
+ const ids=new Set(components.map(c=>c.id));
+ const preserved=(current?.bindings??[]).filter(b=>ids.has(b.source.componentId)&&ids.has(b.target.componentId));
+ const chart=components.find(c=>c.type==='chart'),table=components.find(c=>c.type==='table');
+ if(chart&&table&&!preserved.some(b=>b.target.componentId===chart.id))preserved.push({id:'table_chart',source:{componentId:table.id,port:'items'},target:{componentId:chart.id,port:'items'},transform:'copy'});
+ return preserved;
+}
+export type PipelineDependencies={
+ list:typeof listDefinitions; get:typeof getDefinition; saveGenerated:typeof saveGeneratedDefinition;
+ interpret:typeof interpretTask; populate:(contract:TaskContract,definitions:ComponentDefinition[],current:Workspace|undefined,session:string,feedback?:string)=>Promise<{workspace:Workspace;budget:{spent:number;limit:number;warning:boolean};cached:boolean}>; semantics:typeof semanticScores;
+};
+const defaults:PipelineDependencies={list:listDefinitions,get:getDefinition,saveGenerated:saveGeneratedDefinition,interpret:interpretTask,populate:populateTask,semantics:semanticScores};
+export async function runTaskPipeline(prompt:string,current:Workspace|undefined,session:string,history:unknown[]=[],overrides:Partial<PipelineDependencies>={}){
+ const deps={...defaults,...overrides};
+ let repairUsed=false,interpretation:Awaited<ReturnType<typeof interpretTask>>;
+ try{interpretation=await deps.interpret(prompt,current,session,history);}catch(error){if(!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;interpretation=await deps.interpret(prompt,current,session,history,'The previous task contract failed validation. Correct only its schema/references: '+error.sourceError.message.slice(0,2500));}
+ if(interpretation.intent!=='workspace_change')return {operation:interpretation.intent==='schedule_change'?'schedule':'reply',intent:interpretation.intent,explanation:interpretation.reply,mode:'live' as const,budget:interpretation.budget};
+ const contract=TaskContractSchema.parse(interpretation.contract);
+ if(contract.clarification)return {operation:'reply',intent:'clarification',explanation:contract.clarification,contract,mode:'live' as const,budget:interpretation.budget};
+ const patch=!!current&&!isNewGoal(prompt,current);
+ const previous=patch?current:undefined;
+ let definitions=await deps.list({session});
+ // Historical pins remain readable and are used instead of automatically upgrading instances.
+ if(previous){const restored=new Set<string>(),removedHeads=new Set<string>();for(const component of previous.components){if(!component.catalogRef)continue;const pin=component.catalogRef,key=`${pin.definitionId}@${pin.version}`;if(restored.has(key))continue;const pinned=await deps.get(pin.definitionId,pin.version,{session});if(pinned){if(!removedHeads.has(pinned.id)){definitions=definitions.filter(d=>d.id!==pinned.id);removedHeads.add(pinned.id);}definitions.push({...pinned,status:'active'});restored.add(key);}}}
+ const ranked=rankTaskCandidates(contract,definitions);
+ const eligible=ranked.map(candidate=>candidate.definition);
+ const scores=eligible.length?await deps.semantics(contract.objective,eligible,session,cache):{};
+ let assembly=assembleTask(contract,definitions,{semanticScores:scores});
+ const canGenerate=assembly.coverage.missing.some(m=>/^(?:calculate|collect)\./.test(m.capability)&&!contract.actions.find(a=>a.id===m.actionId)?.external);
+ if(!assembly.components.length&&!canGenerate)return {operation:'reply',intent:'clarification',explanation:assembly.limitations.join(' '),contract,coverage:assembly.coverage,mode:'live' as const,budget:interpretation.budget};
+ const chosen=assembly.selections.map(s=>definitions.find(d=>d.id===s.definitionId&&d.version===s.definitionVersion)!);
+ let generated:Awaited<ReturnType<PipelineDependencies['populate']>>;
+ try{generated=await deps.populate(contract,chosen,previous,session);}catch(error){if(repairUsed||!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;generated=await deps.populate(contract,chosen,previous,session,'Repair the invalid JSON/schema from the previous response; return the required structured workspace and bindings only.');}
+ let final:Workspace|undefined,report:ReturnType<typeof validateTaskInstances>|undefined;
+ // Exactly one focused repair; persistence is outside the retry so failed drafts are never activated.
+ for(let attempt=repairUsed?1:0;attempt<2;attempt++){
+  const draft=generated.workspace;
+  let provisional=[...definitions],newDefinition:ComponentDefinition|undefined,next:TaskAssembly|undefined,candidate:Workspace|undefined;
+  try{
+   const custom=draft.components.find(c=>c.type==='custom'&&!chosen.some(d=>d.template.custom&&formulaSignature(d.template)===formulaSignature(c)))??(canGenerate?draft.components.find(c=>c.type==='custom'):undefined);
+   newDefinition=canGenerate&&custom?privateDefinition(custom,contract,session,assembly.coverage.missing.filter(m=>/^(?:calculate|collect)\./.test(m.capability)).map(m=>m.capability)):undefined;
+   if(newDefinition){const validation=validateDefinition(newDefinition);if(!validation.valid)throw new Error(`Generated definition: ${validation.errors.join('; ')}`);provisional.push({...newDefinition,status:'active'});}
+   next=assembleTask(contract,provisional,{semanticScores:scores,componentData:draft.components});
+   // Keep trusted formulas and renderer types. AI supplies instance data, never replaces a catalog algorithm.
+   next.components=next.components.map(component=>{const selection=next!.selections.find(s=>s.instanceId===component.id)!;const definition=provisional.find(d=>d.id===selection.definitionId&&d.version===selection.definitionVersion)!;
+    if(definition.template.custom&&component.custom){const values=new Map(component.custom.fields.map(f=>[f.id,f.value]));component.custom={...structuredClone(definition.template.custom),fields:definition.template.custom.fields.map(f=>({...f,value:values.get(f.id)??f.value}))};}return component;});
+   next.components=attachPins(next);
+   // Provider-generated IDs are not authoritative during adaptation.
+   const idMap=new Map<string,string>(),usedOld=new Set<string>();
+   if(previous)for(const selection of next.selections){const component=next.components.find(c=>c.id===selection.instanceId)!;const old=previous.components.find(c=>!usedOld.has(c.id)&&c.type===component.type&&c.catalogRef?.definitionId===selection.definitionId&&c.catalogRef.version===selection.definitionVersion)??previous.components.find(c=>!usedOld.has(c.id)&&c.type===component.type&&!c.catalogRef);if(old){usedOld.add(old.id);idMap.set(component.id,old.id);}}
+   const mapped=(id:string)=>idMap.get(id)??id;
+   next.components=next.components.map(c=>({...c,id:mapped(c.id),...(c.dependsOn?{dependsOn:mapped(c.dependsOn)}:{}),...(c.visibleWhen?{visibleWhen:{...c.visibleWhen,componentId:mapped(c.visibleWhen.componentId)}}:{})}));
+   next.selections=next.selections.map(selection=>({...selection,instanceId:mapped(selection.instanceId)}));next.coverage.covered=next.coverage.covered.map(entry=>({...entry,instanceId:mapped(entry.instanceId)}));
+   const bindings=draft.bindings!==undefined?draft.bindings.map(b=>({...b,source:{...b.source,componentId:mapped(b.source.componentId)},target:{...b.target,componentId:mapped(b.target.componentId)}})):inferredBindings(next.components,previous);bindingOrder(next.components,bindings);
+   candidate=WorkspaceSchema.parse({...draft,id:previous?.id??draft.id,goal:previous?.goal??prompt,components:next.components,taskContract:contract,bindings,taskReport:{...next.coverage,limitations:next.limitations}});
+   candidate=previous?applyCandidate(previous,candidate):candidate;
+   report=validateTaskInstances(contract,candidate.components,next.selections);
+   const missingIds=new Set(next.coverage.missing.map(m=>m.actionId));const blockingErrors=report.errors.filter(error=>![...missingIds].some(id=>error.startsWith(`${id}:`)));
+   if(blockingErrors.length)throw new Error(blockingErrors.join('; '));
+   const bound=resolveBindings(candidate,bindings);if(bound.errors.length)throw new Error(`Data binding failed: ${bound.errors.map(e=>e.message).join('; ')}`);
+   report=validateTaskInstances(contract,bound.workspace.components,next.selections);const boundErrors=report.errors.filter(error=>![...missingIds].some(id=>error.startsWith(`${id}:`)));if(boundErrors.length)throw new Error(`Data binding behavior failed: ${boundErrors.join('; ')}`);
+  }catch(error){
+   const message=error instanceof Error?error.message:'Invalid task workspace';
+   if(attempt===0){generated=await deps.populate(contract,chosen,previous,session,`Repair only these validation problems: ${message}`);continue;}
+   throw new AIError(422,`Task validation failed after one repair: ${message}`);
+  }
+  // Persist only after instance behavior, preserved edits, and all data edges pass.
+  if(newDefinition){const existing=await deps.get(newDefinition.id,undefined,{session});const stored=existing??(await deps.saveGenerated(newDefinition,session)).definition;if(stored.status!=='active')throw new AIError(422,'Generated component remained an invalid draft.');const selection=next!.selections.find(s=>s.definitionId===stored.id);if(selection){selection.definitionVersion=stored.version;next!.components=next!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);candidate!.components=candidate!.components.map(c=>c.id===selection.instanceId?{...c,catalogRef:{definitionId:stored.id,version:stored.version}}:c);}}
+  final=candidate!;
+  if(!previous&&isSchedulingGoal(prompt))final.domain={kind:'schedule',id:crypto.randomUUID()};
+  assembly=next!;break;
+ }
+ if(!final)throw new AIError(422,'No validated workspace was produced.');
+ const explanation=final.domain&&!previous?summarizeScheduleDraft(createSchedule(final.domain.id,prompt)):interpretation.reply;
+ return {workspace:final,operation:previous?'patch':'create',intent:'workspace_change',mode:'live' as const,explanation,contract,selections:assembly.selections,coverage:assembly.coverage,validation:report,budget:generated.budget};
+}

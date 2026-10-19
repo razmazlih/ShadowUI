@@ -7,3 +7,10 @@ test-results
 playwright-report
 .env*
 *.tsbuildinfo
+.next-*
+output
+firebase-debug.log
+firestore-debug.log
+firebase-auth-debug.log
+auth-debug.log
+ui-debug.log

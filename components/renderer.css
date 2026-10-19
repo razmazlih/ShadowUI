@@ -84,3 +84,5 @@
 .workspace-surface .r-card.is-dragging{opacity:.65;border-style:dashed;cursor:grabbing}
 .workspace-surface .r-card.is-drag-target{outline:2px solid var(--accent,#b27f4e);outline-offset:3px}
 .workspace-surface .r-flash:last-child:nth-child(odd){grid-column:1/-1}
+
+.r-bound-fieldset{border:0;padding:0;margin:0;min-width:0}.r-bound-fieldset:disabled{opacity:.85}

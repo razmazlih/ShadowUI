@@ -1,0 +1,28 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true,
+    "auth": {
+      "port": 9099
+    }
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "ShadowUI",
+        "supportEmail": "rznmkhj123@gmail.com",
+        "authorizedRedirectUris": [
+          "https://shadowui-razmaz.firebaseapp.com/__/auth/handler"
+        ]
+      }
+    }
+  }
+}

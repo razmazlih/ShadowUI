@@ -23,14 +23,14 @@ test('evaluation 1/5: scheduling conflict changes interaction model; eligible pr
   const id=`evaluation-${crypto.randomUUID()}`;
   let view=await createStoredSchedule(id,scenario.prompt);
   assert.equal(view.evaluation.valid,true);
-  const affected=view.schedule.shifts.find(s=>s.employeeId==='daniel'&&s.date==='2026-10-21');assert.ok(affected);
-  view=await updateSchedule(id,0,'availability',{type:'set_availability',employeeId:'daniel',date:affected.date,unavailable:true});
+  const affected=view.schedule.shifts.find(s=>s.employeeId&&s.date==='2026-10-21');assert.ok(affected);
+  view=await updateSchedule(id,0,'availability',{type:'set_availability',employeeId:affected.employeeId!,date:affected.date,unavailable:true});
   assert.ok(view.evaluation.conflicts.some(c=>c.code==='UNAVAILABLE'));
   const model=chooseInteractionModel({objective:scenario.prompt,issueCount:view.evaluation.conflicts.length,hasPreview:false,committed:false});assert.equal(model.model,'resolution');
   await assert.rejects(()=>commitSchedule(id,view.schedule.revision,'blocked-commit',true),(e:unknown)=>e instanceof ScheduleError&&e.code==='CONFLICTS');
-  const candidate=view.alternatives[affected.id]?.[0];assert.ok(candidate);assert.notEqual(candidate.employeeId,'daniel');assert.equal(candidate.conflicts,0);
+  const candidate=view.alternatives[affected.id]?.[0];assert.ok(candidate);assert.notEqual(candidate.employeeId,affected.employeeId);assert.equal(candidate.conflicts,0);
   const preview=await previewSchedule(id,view.schedule.revision,{type:'assign',shiftId:affected.id,employeeId:candidate.employeeId});assert.equal(preview.evaluation.valid,true);
-  assert.equal((await inspectSchedule(id)).schedule.shifts.find(s=>s.id===affected.id)?.employeeId,'daniel','Preview cannot mutate persisted assignments');
+  assert.equal((await inspectSchedule(id)).schedule.shifts.find(s=>s.id===affected.id)?.employeeId,affected.employeeId,'Preview cannot mutate persisted assignments');
   assert.equal(chooseInteractionModel({objective:scenario.prompt,issueCount:0,hasPreview:true,committed:false}).model,'review');
   view=await updateSchedule(id,view.schedule.revision,'apply',{type:'assign',shiftId:affected.id,employeeId:candidate.employeeId});
   await assert.rejects(()=>updateSchedule(id,0,'stale',{type:'set_min_days_off',value:3}),(e:unknown)=>e instanceof ScheduleError&&e.code==='STALE_REVISION');
@@ -47,7 +47,7 @@ test('evaluation 2/5: substantially tighter days-off constraints are recomputed 
  schedule=applyScheduleOperation(schedule,{type:'set_min_days_off',value:6});
  const view=scheduleView(schedule);assert.equal(view.evaluation.valid,false);assert.ok(view.evaluation.conflicts.some(c=>c.code==='DAYS_OFF'));
  assert.deepEqual(schedule.shifts,original.shifts,'Changing a rule preserves assignments for review');
- schedule=applyScheduleOperation(schedule,{type:'set_availability',employeeId:'daniel',date:'2026-10-21',unavailable:true});
+ schedule=applyScheduleOperation(schedule,{type:'set_availability',employeeId:schedule.shifts[4].employeeId!,date:schedule.shifts[4].date,unavailable:true});
  const blocked=scheduleView(schedule);assert.ok(blocked.evaluation.conflicts.some(c=>c.code==='UNAVAILABLE'));
  for(const [shiftId,candidates]of Object.entries(blocked.alternatives))for(const candidate of candidates){
   const proposed=applyScheduleOperation(schedule,{type:'assign',shiftId,employeeId:candidate.employeeId});

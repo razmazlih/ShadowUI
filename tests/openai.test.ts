@@ -7,6 +7,7 @@ import {livePlan,liveScheduleIntent} from '../lib/openai-planner';
 import {transact,reserve,AIError} from '../lib/ai-budget';
 import {planDemo} from '../lib/planner';
 import {createSchedule} from '../lib/schedule';
+import {activeAIModel} from '../lib/ai-model';
 const originalFetch=global.fetch;const oldKey=process.env.OPENAI_API_KEY;const oldDir=process.env.AI_STATE_DIR;const oldBudget=process.env.AI_BUDGET_USD;const oldRedisUrl=process.env.UPSTASH_REDIS_REST_URL;const oldRedisToken=process.env.UPSTASH_REDIS_REST_TOKEN;
 let dir:string;before(async()=>{dir=await mkdtemp(path.join(tmpdir(),'shadowui-ai-test-'));});
 let calls=0;
@@ -16,12 +17,12 @@ const workspace=planDemo('Help me study biology').workspace;
 function providerContent(content:unknown){
  const data=content as {workspace?:typeof workspace};
  if(!data.workspace?.components?.every(c=>Array.isArray(c.items)))return content;
- return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({custom:null,value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
+ return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({custom:null,weeklySchedule:null,value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
 }
-function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,'gpt-4.1-mini');assert.ok(body.max_completion_tokens<=6000);assert.equal(body.store,false);assert.equal(body.messages.length,2);if((content as {workspace?:unknown}).workspace)assert.equal(body.response_format.json_schema.strict,true);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent(content))}}],usage});};}
+function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,activeAIModel().model);assert.ok(body.max_completion_tokens<=90000);assert.equal(body.store,false);assert.equal(body.messages.length,2);if((content as {workspace?:unknown}).workspace)assert.equal(body.response_format.json_schema.strict,true);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent(content))}}],usage});};}
 test('missing key sends no request and changes no budget',async()=>{delete process.env.OPENAI_API_KEY;global.fetch=async()=>{calls++;throw new Error('unexpected');};await assert.rejects(livePlan('test',undefined,'a'),/OPENAI_API_KEY/);assert.equal(calls,0);});
 test('validated response, usage settlement, session-scoped cache and follow-up context',async()=>{
- mock({workspace});const a=await livePlan('study',undefined,'a');assert.equal(a.mode,'live');assert.equal(a.cached,false);assert.ok(Math.abs(a.budget.spent-0.00192)<1e-9);
+ mock({workspace});const a=await livePlan('study',undefined,'a');assert.equal(a.mode,'live');assert.equal(a.cached,false);const pricing=activeAIModel();assert.ok(Math.abs(a.budget.spent-(1200*pricing.inputUSDPerToken+900*pricing.outputUSDPerToken))<1e-9);
  const b=await livePlan('study',undefined,'a');assert.equal(b.cached,true);assert.equal(calls,1);
  await livePlan('study',undefined,'b');assert.equal(calls,2);
  global.fetch=async(_url,init)=>{calls++;const context=JSON.parse(JSON.parse(String(init?.body)).messages[1].content);assert.deepEqual(context.currentWorkspace,workspace);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent({workspace}))}}],usage:{prompt_tokens:100,completion_tokens:100}});};

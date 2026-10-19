@@ -5,9 +5,9 @@ async function openWorkspace(page:Page){
  await page.route('**/api/plan',route=>route.fulfill({json:route.request().method()==='GET'?{configured:true,storageReady:true,spent:0,limit:1}:{operation:'reply',intent:'workspace_question',explanation:'Your new answer appears in this assistant.',mode:'live'}}));
  await page.goto('/');
  await expect(page.getByRole('heading',{name:'Assistant workspace'})).toBeVisible();
- const launcher=page.getByRole('button',{name:'Open assistant',exact:true});
+ const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});
  if(await launcher.isVisible())await launcher.click();
- return page.getByRole('region',{name:'ShadowUI assistant'});
+ return page.getByRole('region',{name:/ShadowUI/});
 }
 
 test('floating assistant keeps conversation and draft through expand, compact, and minimize',async({page})=>{
@@ -22,10 +22,10 @@ test('floating assistant keeps conversation and draft through expand, compact, a
  await expect(page.getByRole('button',{name:'Compact assistant',exact:true})).toBeVisible();
  await expect.poll(async()=>{const expanded=await assistant.boundingBox();return !!expanded&&!!compact&&expanded.height>compact.height;}).toBe(true);
  await page.getByRole('button',{name:'Compact assistant',exact:true}).click();
- await page.getByRole('button',{name:'Minimize assistant',exact:true}).click();
+ await page.getByRole('button',{name:/^(Minimize assistant|מזעור העוזר)$/}).click();
  await expect(input).not.toBeVisible();
  await page.getByRole('textbox',{name:'Working notes',exact:true}).fill('Notes remain usable with the assistant minimized');
- await page.getByRole('button',{name:'Open assistant',exact:true}).click();
+ await page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/}).click();
  await expect(input).toHaveValue('A draft that should stay here');
  await expect(assistant).toContainText('Your earlier answer is still here.');
  await expect(page.getByRole('textbox',{name:'Working notes',exact:true})).toHaveValue('Notes remain usable with the assistant minimized');
@@ -47,8 +47,8 @@ test('assistant fits 320px in compact, expanded, minimized and RTL states',async
  await page.getByRole('button',{name:'Expand assistant',exact:true}).click();await fits();
  await page.screenshot({path:'output/playwright/floating-assistant-mobile-expanded.png'});
  await page.getByRole('button',{name:'Compact assistant',exact:true}).click();
- await page.getByRole('button',{name:'Toggle language direction'}).click();await fits();
- await page.getByRole('button',{name:'Minimize assistant',exact:true}).click();
- await expect(page.getByRole('button',{name:'Open assistant',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Toggle language direction'}).click();await page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/}).click();await fits();
+ await page.getByRole('button',{name:/^(Minimize assistant|מזעור העוזר)$/}).click();
+ await expect(page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

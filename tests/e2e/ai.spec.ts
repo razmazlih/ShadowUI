@@ -62,8 +62,8 @@ test('conversation without a workspace also survives refresh',async({page})=>{
  });
  await page.goto('/');const input=page.getByLabel('What do you want to accomplish?');
  await input.fill('שלום');await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.getByLabel('Conversation')).toContainText('שלום');
- await page.reload();await expect(page.getByLabel('Conversation')).toContainText('שלום');
+ await expect(page.locator('.conversation-history')).toContainText('שלום');
+ await page.reload();await expect(page.locator('.conversation-history')).toContainText('שלום');
  await input.fill('נמשיך');await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(input).toHaveValue('');expect(posts).toBe(2);
 });

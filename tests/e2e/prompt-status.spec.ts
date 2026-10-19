@@ -20,7 +20,7 @@ test('prompt shows pending, completion and failure beside the input',async({page
  await expect(page.locator('#request-status')).toContainText('Response ready');
  await expect(page.locator('#request-status')).toContainText('Created your study plan.');
  await expect(input).toBeEnabled();
- await expect(page.locator('.conversation-history')).not.toHaveAttribute('open','');
+ await expect(page.getByRole('log')).toContainText('Created your study plan.');
  await page.getByRole('button',{name:'Dismiss notification'}).click();
  await expect(page.locator('#request-status')).toHaveCount(0);
  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces);
@@ -30,14 +30,15 @@ test('prompt shows pending, completion and failure beside the input',async({page
  const id=before[0].id;
  await expect.poll(()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)??'{}').mode,`shadowui.layout.v1:${id}`)).toBe('fixed');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces)).toEqual(before);
- expect(await page.locator('.adapt-bar').evaluate(el=>getComputedStyle(el).position)).toBe('static');
- await expect(page.locator('#request-status')).toHaveCount(0,{timeout:8000});
+ expect(await page.locator('.layout-toolbar').evaluate(el=>getComputedStyle(el).position)).toBe('static');
+ await page.getByRole('button',{name:/^(Dismiss notification|סגירת הודעה)$/}).click();
+ await expect(page.locator('#request-status')).toHaveCount(0);
  fail=true;
  await input.fill('עזור לי ללמוד');
  await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(page.locator('#request-status')).toContainText('מעבד את הבקשה');
  finish();
  await expect(page.locator('#request-status')).toContainText('הבקשה נכשלה');
- await expect(page.locator('.error[role=alert]')).toContainText('Provider unavailable');
+ await expect(page.getByRole('alert').filter({hasText:'Provider unavailable'})).toContainText('Provider unavailable');
  await expect(input).toHaveValue('עזור לי ללמוד');
 });

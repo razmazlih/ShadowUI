@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-19",
+  "firebase": {
+    "project": "shadowui-razmaz",
+    "database": "(default)",
+    "edition": "STANDARD",
+    "location": "eur3",
+    "freeTier": true,
+    "deleteProtection": true,
+    "sharedSeedDefinitions": 16,
+    "realServerReadAndBrowserInteraction": true,
+    "googleProviderEnabled": true,
+    "interactiveGoogleAdministratorLoginVerified": false
+  },
+  "checks": {
+    "unit": {
+      "passed": 140,
+      "failed": 0,
+      "emulatorGatedSkips": 2
+    },
+    "authAndFirestoreEmulators": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "newMockedBrowser": {
+      "passed": 3,
+      "failed": 0
+    },
+    "realDatabaseBrowser": {
+      "passed": 1,
+      "failed": 0
+    },
+    "legacyMockedBrowser": {
+      "passed": 20,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "productionDependencyAudit": {
+      "vulnerabilities": 0
+    },
+    "hostedRealDatabaseBrowser": {
+      "automatedApiClient": "Did not pass: received HTML rather than JSON from the hosted endpoint; not counted as a passing test.",
+      "manualInAppBrowser": "Passed actual Hebrew task -> calculator -> input edit -> reload persistence on final Preview."
+    }
+  },
+  "liveAi": {
+    "simple": "one weekly schedule; full action coverage",
+    "complex": "comparison + calculator + checklist; full action coverage",
+    "missingDefinition": "rectangle area and perimeter calculator; private validated revision 2",
+    "reuse": "same generated definition ID and revision retrieved for repeated task",
+    "applicationLedgerAfterChecksUSD": 0.3933,
+    "applicationBudgetUSD": 1,
+    "notes": "Application lifetime ledger includes earlier usage; not a provider invoice or isolated benchmark. All verification prompts were synthetic.",
+    "strictTaskContractFixVerified": true,
+    "applicationLedgerApproximate": true
+  },
+  "boundaries": [
+    "Workspace instances are browser-local, not cross-device synchronized.",
+    "Generated code is never executed; generation uses bounded calculators and input forms.",
+    "Live collection-form generation is unit-tested but not separately provider-verified.",
+    "Older unmocked browser tests that assume a removed demo mode were excluded; no universal browser-suite claim.",
+    "Model interpretation and formula semantics are not universally verified."
+  ],
+  "deployment": {
+    "url": "https://shadowui-c4pu393eq-razs-projects-0212f70e.vercel.app",
+    "target": "preview",
+    "ready": true,
+    "productionChanged": false,
+    "catalogReadAndInteractiveCalculationVerified": true,
+    "completeHostedTaskFlowVerified": true,
+    "hostedScenario": "Hebrew request -> strict contract -> Firestore calculator -> 21; edit quantity to 4 -> 28; reload retains quantity 4 and result 28"
+  }
+}

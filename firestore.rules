@@ -1,0 +1,7 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Catalog access is mediated by server APIs and verified administrator tokens.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

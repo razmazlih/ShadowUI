@@ -4,6 +4,10 @@
 
 The primary use case is repairing a small team's weekly shift plan after availability changes. It demonstrates a narrower hypothesis than “AI builds any app”: observable work state can determine when a calendar should give way to a decision surface and then a confirmation surface. This is a product hypothesis, not a proven competitive advantage.
 
+## Task-aware catalog
+
+The task pipeline now builds a validated task contract, selects capability-compatible components from Firestore, composes typed local data bindings, and can generate private validated calculators when no catalog formula fits. Visit `/catalog` for browsing, interactive previews and authenticated version management. Instance edits stay in this browser; catalog definitions persist in Firebase. See [configuration, behavior and limitations](docs/component-catalog.md).
+
 ## Run
 
 Node.js 20.9+ and installed Google Chrome for browser tests.

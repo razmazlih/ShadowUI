@@ -8,7 +8,7 @@ test('durable lifecycle supports preview, idempotent updates, stale rejection, c
  const dir=await mkdtemp(path.join(tmpdir(),'shadow-schedule-'));process.env.SHADOWUI_DATA_DIR=dir;
  try{
   const initial=await createStoredSchedule('persisted','Schedule six employees');assert.equal(initial.schedule.revision,0);
-  const op={type:'set_availability' as const,employeeId:'daniel',date:'2026-10-21',unavailable:true};
+  const op={type:'set_availability' as const,employeeId:initial.schedule.shifts[4].employeeId!,date:initial.schedule.shifts[4].date,unavailable:true};
   const preview=await previewSchedule('persisted',0,op);assert.equal(preview.evaluation.valid,false);assert.equal((await inspectSchedule('persisted')).schedule.revision,0);
   const changed=await updateSchedule('persisted',0,'availability',op);assert.equal(changed.schedule.revision,1);assert.equal((await updateSchedule('persisted',0,'availability',op)).schedule.revision,1);
   await assert.rejects(()=>updateSchedule('persisted',0,'stale',op),{code:'STALE_REVISION'});await assert.rejects(()=>updateSchedule('persisted',1,'availability',{...op,unavailable:false}),{code:'ACTION_ID_REUSED'});
@@ -18,7 +18,7 @@ test('durable lifecycle supports preview, idempotent updates, stale rejection, c
   const raw=JSON.parse(await readFile(path.join(dir,'persisted.json'),'utf8'));assert.equal(raw.schedule.receipt.id,committed.schedule.receipt?.id);
   const undone=await updateSchedule('persisted',3,'undo',{type:'undo'});assert.equal(undone.schedule.status,'draft');assert.equal(undone.schedule.receipt,undefined);assert.equal(undone.schedule.revision,4);
   await assert.rejects(()=>commitSchedule('persisted',2,'commit',true),{code:'ACTION_SUPERSEDED'});assert.equal((await inspectSchedule('persisted')).schedule.status,'draft');
-  const previous=await updateSchedule('persisted',4,'undo-repair',{type:'undo'});assert.equal(previous.schedule.shifts[4].employeeId,'daniel');assert.equal(previous.evaluation.valid,false);
+  const previous=await updateSchedule('persisted',4,'undo-repair',{type:'undo'});assert.equal(previous.schedule.shifts[4].employeeId,op.employeeId);assert.equal(previous.evaluation.valid,false);
   const original=await updateSchedule('persisted',5,'undo-availability',{type:'undo'});assert.equal(original.evaluation.valid,true);await assert.rejects(()=>updateSchedule('persisted',6,'empty',{type:'undo'}),{code:'NO_HISTORY'});
  }finally{delete process.env.SHADOWUI_DATA_DIR;await rm(dir,{recursive:true,force:true});}
 });
