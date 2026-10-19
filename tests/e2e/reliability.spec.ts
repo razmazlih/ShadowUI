@@ -14,7 +14,7 @@ test('unsupported execution offers functional local alternative without receipt'
  await expect(page.getByRole('heading',{name:'Capability boundary'})).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Capability boundary'})).toHaveValue(/I cannot execute that external action/);
  await expect(page.getByText('Verified backend receipt')).not.toBeVisible();
- await page.getByRole('navigation',{name:'Choose a tool'}).getByRole('button',{name:/Before you go/}).click();await page.getByRole('checkbox').first().check();await expect(page.getByRole('checkbox').first()).toBeChecked();
+ await page.getByRole('checkbox').first().check();await expect(page.getByRole('checkbox').first()).toBeChecked();
 });
 
 test('stale user session refreshes authoritative data instead of overwriting',async({page})=>{

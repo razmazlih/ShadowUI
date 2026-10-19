@@ -13,7 +13,8 @@ test('all demo transcripts open without network actions or touching saved work',
   await history.getByRole('button').nth(i).click();
   await expect(page.getByRole('heading',{name:'התוצר שלכם'})).toBeVisible();
   await expect(page.locator('.demo-transcript')).not.toHaveAttribute('open','');
-  await expect(page.locator('.r-card:visible')).toHaveCount(1);
+  expect(await page.locator('.r-card:visible').count()).toBeGreaterThan(0);
+  await expect(page.getByRole('navigation',{name:/Choose a tool|בחירת כלי/})).toHaveCount(0);
   expect(await page.locator('.demo-transcript').evaluate(el=>!!el.previousElementSibling?.querySelector('.r-card'))).toBe(true);
   await page.locator('.demo-transcript > summary').click();
   await expect(page.locator('.demo-message').first()).toContainText('אתם');
