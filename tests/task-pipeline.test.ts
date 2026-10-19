@@ -136,3 +136,10 @@ test('missing local renderer is repaired once and cannot be reported as a comple
  const c=component('notes'),contract=demoTaskContract('Build a dated editor',[c]);contract.actions[0].capability='schedule.special_week';contract.actions[0].inputKind='schedule';const h=harness(contract,[c]);
  await assert.rejects(runTaskPipeline(contract.objective,undefined,session,[],h.deps),/after one repair/);assert.equal(h.calls.populate,2);assert.equal(h.saved.length,0);
 });
+
+test('generated specific formulas never advertise the generic multiplication capability',async()=>{
+ const c=component('calculator');c.custom!.outputs=[{id:'area',label:'Area',expression:['quantity','quantity','*'],unit:''}];
+ const contract=demoTaskContract('Square area',[c]);contract.actions[0].capability='calculate.square_area';contract.actions[0].inputKind='custom';
+ const h=harness(contract,[c]);await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.equal(h.saved.length,1);assert.equal(h.saved[0].capabilities.includes('calculate.formula'),false);assert.equal(h.saved[0].capabilities.includes('calculate.square_area'),true);
+});
