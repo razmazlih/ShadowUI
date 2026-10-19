@@ -88,3 +88,30 @@ export function parseLayout(value: unknown): LayoutState | null {
   }
   return { mode: candidate.mode, order: [...order], sizes };
 }
+
+/** Handle explicit presentation-only commands locally, before contacting the planner. */
+export function isLayoutRequest(prompt: string): boolean {
+  const text = prompt.trim().replace(/[.!?]+$/u, '').trim();
+  // Mixed data/content edits still belong to the planner.
+  if (/\b(?:add|remove|delete|create|build)\b|(?:תוסיף|להוסיף|תמחק|למחוק|תסיר|להסיר)/iu.test(text)) return false;
+  const target = /(?:מסך|תצוגה|פריסה|רכיבים|קומפוננטות|קופוננטות|כרטיסים|סביבת העבודה)|\b(?:screen|layout|components?|cards?|workspace)\b/iu;
+  const action = /(?:^|\s)(?:ש?תסדר|סדר|סדרי|לסדר|ש?תארגן|ארגן|לארגן|תסדרי|תארגני)(?:\s|$)|\b(?:arrange|rearrange|organize|reorganize|tidy)\b/iu;
+  const question = /^(?:למה|מדוע|איך|כיצד|מה|האם)(?:\s|$)|^(?:why|how|what|does|is)\b/iu;
+  return target.test(text) && action.test(text) && !question.test(text);
+}
+
+/** Put the main structured tools first and give reading-heavy tools a full row.
+ * A fixed result is intentional: it replaces any previously saved manual geometry.
+ * Tool objects and their editable data are never changed.
+ */
+export function requestedLayout(components: UIComponent[], availableWidth = Infinity): LayoutState {
+  const priority = (component: UIComponent) => ['timeline', 'calendar', 'kanban'].includes(component.type) ? 0 : ['table', 'comparison'].includes(component.type) ? 1 : 2;
+  const ordered = components.map((component, index) => ({ component, index }))
+    .sort((a, b) => priority(a.component) - priority(b.component) || a.index - b.index)
+    .map(entry => entry.component);
+  const layout = automaticLayout(ordered, availableWidth);
+  for (const component of ordered) {
+    if (['timeline', 'notes'].includes(component.type)) layout.sizes[component.id].columns = 12;
+  }
+  return { ...layout, mode: 'fixed' };
+}

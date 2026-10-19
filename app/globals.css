@@ -12,3 +12,11 @@
 
 .conversation-history{width:100%;max-width:760px;margin:16px auto;text-align:start;overflow-wrap:anywhere;max-height:300px;overflow-y:auto}
 .conversation-history p{white-space:pre-wrap;font-size:14px;line-height:1.6;margin:10px 0}
+
+/* Keep workspace tools unobstructed, with replies available on demand. */
+.adapt-bar{position:static;background:none;margin-top:20px}
+.conversation-history{max-height:240px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:var(--panel)}
+.conversation-history summary{cursor:pointer;font-size:12px;color:var(--muted)}
+.request-status>div{min-width:0;flex:1}
+.request-status p{max-height:4.8em;overflow:auto}
+.dismiss-status{flex-shrink:0;min-width:32px;min-height:32px}

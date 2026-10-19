@@ -20,6 +20,18 @@ test('prompt shows pending, completion and failure beside the input',async({page
  await expect(page.locator('#request-status')).toContainText('Response ready');
  await expect(page.locator('#request-status')).toContainText('Created your study plan.');
  await expect(input).toBeEnabled();
+ await expect(page.locator('.conversation-history')).not.toHaveAttribute('open','');
+ await page.getByRole('button',{name:'Dismiss notification'}).click();
+ await expect(page.locator('#request-status')).toHaveCount(0);
+ const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces);
+ await input.fill('אני רוצה שתסדר לי את המסך');
+ await page.getByRole('button',{name:'Build workspace'}).click();
+ await expect(page.locator('#request-status')).toContainText('סידרתי את הרכיבים');
+ const id=before[0].id;
+ await expect.poll(()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)??'{}').mode,`shadowui.layout.v1:${id}`)).toBe('fixed');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces)).toEqual(before);
+ expect(await page.locator('.adapt-bar').evaluate(el=>getComputedStyle(el).position)).toBe('static');
+ await expect(page.locator('#request-status')).toHaveCount(0,{timeout:8000});
  fail=true;
  await input.fill('עזור לי ללמוד');
  await page.getByRole('button',{name:'Build workspace'}).click();

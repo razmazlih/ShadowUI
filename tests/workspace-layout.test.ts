@@ -104,3 +104,25 @@ test('breakpoints change compact tools from a stack to pairs to thirds', () => {
    assert.equal(automaticLayout([component('comparison', 'comparison')], 1400).sizes.comparison.columns, 12);
    assert.equal(automaticLayout([component('timer', 'timer')], 320).sizes.timer.columns, 12);
  });
+
+test('explicit layout commands are recognized without swallowing questions or mixed edits', async () => {
+  const { isLayoutRequest } = await import('../lib/workspace-layout');
+  for (const prompt of ['תסדר לי את המסך', 'אני רוצה שתסדר לי את המסך', 'סדר את הקומפוננטות', 'אפשר לסדר את המסך?', 'Arrange the layout', 'Could you please rearrange my cards?', 'Organize this workspace']) assert.equal(isLayoutRequest(prompt), true, prompt);
+  for (const prompt of ['איך לסדר את המסך?', 'Why rearrange the layout?', 'Add a table and arrange the layout', 'תסדר את המסך ותוסיף טבלה', 'תכנן סידור עבודה', 'Change the budget']) assert.equal(isLayoutRequest(prompt), false, prompt);
+});
+
+test('requested arrangement prioritizes the itinerary, applies real geometry, and preserves all data', async () => {
+  const { requestedLayout } = await import('../lib/workspace-layout');
+  const components = [component('links', 'links'), { ...component('budget', 'table'), items: [{ id: 'cost', label: 'Hotel', value: 270 }] }, component('itinerary', 'timeline'), component('notes', 'notes')];
+  const before = JSON.stringify(components);
+  const next = requestedLayout(components, 1400);
+  assert.equal(next.mode, 'fixed');
+  assert.deepEqual(next.order, ['itinerary', 'budget', 'links', 'notes']);
+  assert.equal(next.sizes.itinerary.columns, 12);
+  assert.equal(next.sizes.budget.columns, 12);
+  assert.equal(next.sizes.notes.columns, 12);
+  assert.ok(parseLayout(next));
+  assert.equal(JSON.stringify(components), before);
+  assert.deepEqual(reconcileLayout(next, components), next);
+  assert.ok(Object.values(requestedLayout(components, 320).sizes).every(size => size.columns === 12));
+});

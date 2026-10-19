@@ -3,7 +3,7 @@
 import {useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
 import {GripVertical, MoreHorizontal, MoveDiagonal2} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
-import {automaticLayout, parseLayout, reconcileLayout, type LayoutState} from '@/lib/workspace-layout';
+import {automaticLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
 import {toolIcons, toolLabel} from './tool-metadata';
 
 type Size = LayoutState['sizes'][string];
@@ -54,6 +54,17 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   if(!saved.ready||saved.workspaceId!==workspaceId)return;
   try{localStorage.setItem(storageKey,JSON.stringify(reconcileLayout(saved.layout,components)));setStorageWarning(false);}catch{setStorageWarning(true);}
  },[saved,workspaceId,storageKey,composition]);
+ useEffect(()=>{
+  const arrange=(event:Event)=>{
+   if(!(event instanceof CustomEvent)||event.detail?.workspaceId!==workspaceId)return;
+   const width=grid.current?.clientWidth??availableWidth;
+   setSaved({workspaceId,layout:requestedLayout(components,width),ready:true});
+   setPreview(null);setTarget(null);gesture.current=null;
+   setAnnouncement(he?'סידור הרכיבים עודכן':'Component layout updated');
+  };
+  window.addEventListener('shadowui:arrange-layout',arrange);
+  return ()=>window.removeEventListener('shadowui:arrange-layout',arrange);
+ },[workspaceId,components,availableWidth,he]);
  function commit(next:LayoutState){setSaved({workspaceId,layout:next,ready:true});}
  function fixed(){return {...current.current,mode:'fixed' as const,order:[...current.current.order],sizes:Object.assign(Object.create(null),current.current.sizes)};}
  function move(id:string,to:number){const next=fixed();const from=next.order.indexOf(id);if(from<0)return;next.order.splice(from,1);next.order.splice(clamp(to,0,next.order.length),0,id);commit(next);setAnnouncement(he?'מיקום הקומפוננטה עודכן':'Component position updated');}
