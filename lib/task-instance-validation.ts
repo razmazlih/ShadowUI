@@ -1,3 +1,4 @@
+import {LEARNING_PLAN_POLICY} from './task-workspace-policy';
 import { ComponentSchema, type UIComponent } from './schema';
 import { evaluateCustomTool } from './custom-tool';
 import { TaskContractSchema, type TaskContract } from './task-contract';
@@ -14,6 +15,11 @@ export function validateTaskInstances(contract:TaskContract, source:TaskAssembly
  if(components.length>16)errors.push('Workspace exceeds the 16 component limit');
  if(new Set(components.map(component=>component.id)).size!==components.length)errors.push('Duplicate component instance IDs');
  const byId=new Map(components.map(component=>[component.id,component]));
+ if(contract.constraints.includes(LEARNING_PLAN_POLICY)){
+  if(!components.some(c=>c.type==='timeline'&&c.items.length>=2))errors.push('Learning plan requires at least two structured learning milestones; a prose outline cannot replace them');
+  if(!components.some(c=>c.type==='checklist'&&c.items.length>=2))errors.push('Learning plan requires at least two actionable practice tasks with completion controls');
+ }
+
  for(const component of components) {
   const shape=ComponentSchema.safeParse(component);
   if(!shape.success){errors.push(`${component.id}: ${shape.error.issues.map(issue=>issue.message).join('; ')}`);continue;}

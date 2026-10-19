@@ -1,3 +1,4 @@
+import {enforceWorkspaceBehavior} from './task-workspace-policy';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {TaskContractSchema,type TaskContract} from './task-contract';
@@ -70,7 +71,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
   interpretation={...interpretation,intent:'workspace_change',contract:{...contract,clarification:undefined},reply:/[א-ת]/.test(prompt)?'יוצר סביבת עבודה לעריכה. מידע חסר נשאר כקלט להשלמה.':'Creating an editable workspace. Missing information remains available for you to enter.'};
  }
  if(interpretation.intent!=='workspace_change')return {operation:interpretation.intent==='schedule_change'?'schedule':'reply',intent:interpretation.intent,explanation:interpretation.reply,mode:'live' as const,budget:interpretation.budget};
- const contract=TaskContractSchema.parse(interpretation.contract);
+ const contract=enforceWorkspaceBehavior(TaskContractSchema.parse(interpretation.contract),current?`${current.goal}\n${prompt}`:prompt);
  if(contract.clarification)return {operation:'reply',intent:'clarification',explanation:contract.clarification,contract,mode:'live' as const,budget:interpretation.budget};
  const patch=!!current&&!isNewGoal(prompt,current);
  const previous=patch?current:undefined;

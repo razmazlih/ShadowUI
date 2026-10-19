@@ -150,3 +150,22 @@ test('a catalog table and a newly generated table can coexist',async()=>{
  const h=harness(contract,[known,special]);const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
  assert.equal(result.coverage?.complete,true);assert.equal(result.workspace?.components.length,2);assert.equal(h.saved.length,1);assert.equal(h.saved[0].name,'Inventory editor');
 });
+
+test('a prose-only learning plan cannot pass and receives a targeted interactive repair',async()=>{
+ const notes=component('notes');notes.text='# Backend\n## Stage 1\nRead HTTP\n## Stage 2\nBuild APIs';
+ const contract=demoTaskContract('תוכנית לימוד Backend',[notes]),h=harness(contract,[notes]);let feedback='';
+ h.deps.populate=async(_contract,_definitions,_current,_session,repair)=>{h.calls.populate++;feedback=repair??'';return {workspace:draft([notes]),budget,cached:false};};
+ await assert.rejects(runTaskPipeline(contract.objective,undefined,session,[],h.deps),/Learning plan requires/);
+ assert.equal(h.calls.populate,2);assert.match(feedback,/milestones/);assert.equal(h.saved.length,0);
+});
+
+test('learning-plan repair produces usable milestones and practice controls instead of prose alone',async()=>{
+ const notes=component('notes'),timeline=component('timeline'),practice=component('checklist');
+ timeline.items=[{id:'http',label:'Understand HTTP requests'},{id:'api',label:'Build a database-backed API'}];
+ practice.items=[{id:'health',label:'Implement GET /health',done:false},{id:'crud',label:'Implement CRUD endpoints',done:false}];
+ const contract=demoTaskContract('Backend learning plan',[notes]),h=harness(contract,[notes]);
+ h.deps.populate=async()=>{h.calls.populate++;return {workspace:draft(h.calls.populate===1?[notes]:[notes,timeline,practice]),budget,cached:false};};
+ const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.equal(result.operation,'create');assert.equal(result.coverage?.complete,true);assert.equal(result.validation?.valid,true);
+ assert.equal(result.workspace?.components.find(c=>c.type==='checklist')?.items.length,2);assert.equal(h.calls.populate,2);
+});
