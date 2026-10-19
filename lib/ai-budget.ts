@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {mkdir,readFile,writeFile,rename,open,unlink} from 'node:fs/promises';
 import {connect as tlsConnect} from 'node:tls';
 import path from 'node:path';
-export class AIError extends Error {constructor(public status:number,message:string){super(message)}}
+export class AIError extends Error {constructor(public status:number,message:string,public sourceError?:Error){super(message)}}
 export type Ledger={spent:number;entries:Record<string,{at:number;cost:number;result?:unknown}>};
 const LedgerSchema=z.object({spent:z.number().finite().nonnegative(),entries:z.record(z.object({at:z.number().finite(),cost:z.number().finite().nonnegative(),result:z.unknown().optional()}))});
 const empty=():Ledger=>({spent:0,entries:{}});
