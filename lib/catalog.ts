@@ -46,7 +46,7 @@ export function validateDefinition(input:unknown):{valid:boolean;errors:string[]
  const bindings=d.capabilityBindings??[];
  if(new Set(bindings.map(binding=>binding.capability)).size!==bindings.length)errors.push('Duplicate capability bindings');
  for(const binding of bindings){
-  if(d.source!=='ai'||!d.capabilities.includes(binding.capability)||!supported[c.type].includes(binding.primitiveCapability)||!d.capabilities.includes(binding.primitiveCapability))errors.push('Capability binding requires a supported declared primitive behavior');
+  if(d.source!=='ai'||!d.capabilities.includes(binding.capability)||!supported[c.type].includes(binding.primitiveCapability))errors.push('Capability binding requires a supported declared primitive behavior');
   if(c.type==='custom'&&binding.primitiveCapability==='calculate.formula'&&!c.custom?.outputs.length)errors.push('Calculation binding requires working outputs');
  }
 

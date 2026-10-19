@@ -37,7 +37,7 @@ function privateDefinition(component:UIComponent,contract:TaskContract,session:s
  const canonical=template.type==='custom'&&!template.custom?.outputs.length?'input.form':primitiveCapabilities(template.type)[0];
  const aliases=missing.filter(c=>!primitiveCapabilities(template.type).includes(c)&&!(/^(calculate|collect)\./.test(c)&&template.type==='custom'));
  const id=`generated_${createHash('sha256').update(session+JSON.stringify([...missing].sort())+formulaSignature(template)).digest('hex').slice(0,32)}`;
- return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative workspace tool',categories:[template.type],tags:[template.type],capabilities:[...new Set([...missing,...(aliases.length?[canonical]:[])])],actions:[...new Set([...missing,...(aliases.length?[canonical]:[])])],capabilityBindings:aliases.map(capability=>({capability,primitiveCapability:canonical})),limitations:['Local interactive workspace only; user inputs remain editable. No external actions are executed.'],inputSchema:primitiveInputSchema(template.type),outputSchema:outputSchema(template.type),stateSchema:primitiveStateSchema(template.type),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
+ return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative workspace tool',categories:[template.type],tags:[template.type],capabilities:[...new Set(missing)],actions:[...new Set(missing)],capabilityBindings:aliases.map(capability=>({capability,primitiveCapability:canonical})),limitations:['Local interactive workspace only; user inputs remain editable. No external actions are executed.'],inputSchema:primitiveInputSchema(template.type),outputSchema:outputSchema(template.type),stateSchema:primitiveStateSchema(template.type),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
 }
 function attachPins(assembly:TaskAssembly){
  return assembly.components.map(component=>{const selection=assembly.selections.find(s=>s.instanceId===component.id)!;return {...component,catalogRef:{definitionId:selection.definitionId,version:selection.definitionVersion}};});
@@ -92,7 +92,8 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
   const draft=generated.workspace;
   let provisional=[...definitions],newDefinitions:ComponentDefinition[]=[],next:TaskAssembly|undefined,candidate:Workspace|undefined;
   try{
-   const unused=draft.components.filter(c=>!chosen.some(d=>d.template.type===c.type&&(c.type!=='custom'||formulaSignature(d.template)===formulaSignature(c))));
+   const existingInstances=new Set(assembleTask(contract,definitions,{semanticScores:scores,componentData:draft.components}).components.map(c=>c.id));
+   const unused=draft.components.filter(c=>!existingInstances.has(c.id));
    for(const missing of assembly.coverage.missing){
     const action=contract.actions.find(a=>a.id===missing.actionId)!;if(action.external)continue;
     if(/(?:^|[._-])(?:export|import|convert|search|fetch|browse|upload|download|run|execute|code|send|pay|purchase|book|deploy)(?:[._-]|$)/i.test(action.capability))throw new Error(`No validated local executor for ${action.capability}`);

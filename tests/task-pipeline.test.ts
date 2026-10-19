@@ -143,3 +143,10 @@ test('generated specific formulas never advertise the generic multiplication cap
  const h=harness(contract,[c]);await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
  assert.equal(h.saved.length,1);assert.equal(h.saved[0].capabilities.includes('calculate.formula'),false);assert.equal(h.saved[0].capabilities.includes('calculate.square_area'),true);
 });
+
+test('a catalog table and a newly generated table can coexist',async()=>{
+ const known=component('table'),special={...component('table'),id:'inventory_action',title:'Inventory editor'};
+ const contract=demoTaskContract('Two independent data editors',[known,special]);contract.actions[0].inputKind='items';contract.actions[1].capability='inventory.track';contract.actions[1].inputKind='items';
+ const h=harness(contract,[known,special]);const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.equal(result.coverage?.complete,true);assert.equal(result.workspace?.components.length,2);assert.equal(h.saved.length,1);assert.equal(h.saved[0].name,'Inventory editor');
+});
