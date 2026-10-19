@@ -1,6 +1,6 @@
 # OpenAI integration and low-budget testing
 
-The Next.js server calls OpenAI directly with `OPENAI_API_KEY`. No provider credential is sent to the browser, API error, or application log. Through 2026-10-19 22:08:30 Asia/Jerusalem, Live AI uses `gpt-6.1-sol`; after that fixed UTC deadline it automatically returns to `gpt-4.1-mini`. The budget reserve and settlement use the active model's published input and output rates. There is no automatic expensive fallback. Do not configure any secret with `NEXT_PUBLIC_`.
+The Next.js server calls OpenAI directly with `OPENAI_API_KEY`. No provider credential is sent to the browser, API error, or application log. Through 2026-10-19 22:08:30 Asia/Jerusalem, Live AI uses `gpt-6.1-sol`; after that fixed UTC deadline it automatically returns to `gpt-4.1-mini`. GPT-6.1 Sol uses its default medium reasoning effort and does not receive a temperature parameter. The budget reserve and settlement use the active model's published input and output rates. There is no automatic expensive fallback. Do not configure any secret with `NEXT_PUBLIC_`.
 
 ## Production setup
 

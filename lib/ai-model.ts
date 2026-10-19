@@ -4,12 +4,14 @@ export type AIModelConfig = {
  model: string;
  inputUSDPerToken: number;
  outputUSDPerToken: number;
+ temperature?: number;
 };
 
 const baseline: AIModelConfig = {
  model: 'gpt-4.1-mini',
  inputUSDPerToken: 0.40 / 1e6,
  outputUSDPerToken: 1.60 / 1e6,
+ temperature: 0.3,
 };
 
 const trial: AIModelConfig = {
