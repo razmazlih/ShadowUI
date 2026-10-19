@@ -36,7 +36,7 @@ Additional protections: atomic Redis compare-and-set or exclusive file transacti
 
 At 80% of the configured limit, the Live notice warns. Requests whose reservation would exceed the limit are blocked. The $1 default is the application's lifetime estimate cap. The cap applies only to this application and ledger. Provider pricing changes, other applications, erased storage and unknown billing behavior mean it is **not an absolute OpenAI billing guarantee**.
 
-Responses are rendered only after complete JSON validation. Streaming partial workspace JSON is deliberately avoided because it cannot yet be safely applied; the existing busy indicator and explicit preview communicate progress. Provider timeout is 40 seconds; browser timeout is 55 seconds. 429, rejected key, invalid/truncated output, network failure and storage failure preserve saved work. Known uncharged 4xx failures release their reservation; usage-bearing invalid output is still accounted for. Unknown outcomes block the identical request for ten minutes; known failures allow a manual retry after 15 seconds.
+Responses are rendered only after complete JSON validation. Streaming partial workspace JSON is deliberately avoided because it cannot yet be safely applied; the existing busy indicator and explicit preview communicate progress. Provider timeout is 50 seconds; browser timeout is 55 seconds. 429, rejected key, invalid/truncated output, network failure and storage failure preserve saved work. Known uncharged 4xx failures release their reservation; usage-bearing invalid output is still accounted for. Unknown outcomes block the identical request for ten minutes; known failures allow a manual retry after 15 seconds.
 
 ## Verification
 
