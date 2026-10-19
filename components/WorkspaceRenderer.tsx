@@ -1,24 +1,18 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { Check, Plus, X, ArrowRight, Layers, Clock3 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Check, Plus, X, ArrowRight, Layers, Clock3, GripVertical } from 'lucide-react';
 import { SafeUrlSchema } from '../lib/schema';
 import type { Workspace, UIComponent, Item } from '../lib/schema';
 import './renderer.css';
-import {visibleComponents} from './tool-metadata';
-import WorkspaceLayout from './WorkspaceLayout';
+import AdaptiveOverview, {visibleComponents} from './AdaptiveOverview';
 import { comparisonResults, scheduleFacts } from './renderer-calculations';
 type Change=(patch:Partial<UIComponent>)=>void;
 const uid=()=>globalThis.crypto.randomUUID();
 function AddItem({onAdd,label='Add item'}:{onAdd:(label:string)=>void;label?:string}){const [value,setValue]=useState('');return <form className="r-add" onSubmit={e=>{e.preventDefault();if(value.trim()){onAdd(value.trim());setValue('');}}}><input aria-label={label} placeholder={label} value={value} onChange={e=>setValue(e.target.value)} maxLength={500}/><button aria-label={label} type="submit"><Plus size={16}/></button></form>}
 function Timer({c,change}:{c:UIComponent;change:Change}){const [running,setRunning]=useState(false);const [remaining,setRemaining]=useState(Math.max(1,c.value??25)*60);useEffect(()=>{setRemaining(Math.max(1,c.value??25)*60);setRunning(false)},[c.value]);useEffect(()=>{if(!running)return;const timer=setInterval(()=>setRemaining(n=>{if(n<=1){setRunning(false);return 0}return n-1}),1000);return ()=>clearInterval(timer)},[running]);return <div className="r-timer"><Clock3 size={22}/><strong aria-live="off">{Math.floor(remaining/60).toString().padStart(2,'0')}:{(remaining%60).toString().padStart(2,'0')}</strong><div className="r-row"><button className="r-primary" onClick={()=>setRunning(!running)}>{running?'Pause':'Start focus'}</button><button onClick={()=>{setRunning(false);setRemaining((c.value??25)*60)}}>Reset</button><label>Minutes <input aria-label="Focus duration" type="number" min={1} max={180} value={c.value??25} onChange={e=>change({value:Math.max(1,Math.min(180,Number(e.target.value)))})}/></label></div>{remaining===0&&<p role="status">Session complete. Take a breath.</p>}</div>}
-function Notes({c,change}:{c:UIComponent;change:Change}){
- const ref=useRef<HTMLTextAreaElement>(null);
- useEffect(()=>{const element=ref.current;if(!element)return;let lastWidth=-1;const fit=()=>{const width=element.clientWidth;if(width===lastWidth)return;lastWidth=width;element.style.height='auto';element.style.height=`${Math.max(110,Math.min(480,element.scrollHeight+2))}px`;};const observer=new ResizeObserver(fit);observer.observe(element);fit();return ()=>observer.disconnect();},[]);
- return <textarea ref={ref} className="r-notes" aria-label={c.title} placeholder="Capture a thought…" value={c.text??''} onChange={e=>change({text:e.target.value.slice(0,5000)})}/>;
-}
 function Primitive({c,change}:{c:UIComponent;change:Change}){const update=(id:string,p:Partial<Item>)=>change({items:c.items.map(i=>i.id===id?{...i,...p}:i)});const remove=(id:string)=>change({items:c.items.filter(i=>i.id!==id)});const add=(label:string)=>change({items:[...c.items,{id:uid(),label}]});
 if(c.type==='links')return <div className="r-link-list" dir="auto">{c.text&&<p className="r-muted r-small">{c.text}</p>}{c.items.map(i=>SafeUrlSchema.safeParse(i.url).success?<a className="r-resource-link" key={i.id} href={i.url} target="_blank" rel="noopener noreferrer"><div><strong>{i.label}</strong>{i.detail&&<small>{i.detail}</small>}<small dir="ltr">{new URL(i.url!).hostname}</small></div><ArrowRight size={18}/></a>:null)}</div>;
-if(c.type==='notes')return <Notes c={c} change={change}/>;
+if(c.type==='notes')return <textarea className="r-notes" aria-label={c.title} placeholder="Capture a thought…" value={c.text??''} onChange={e=>change({text:e.target.value.slice(0,5000)})}/>;
 if(c.type==='timer')return <Timer c={c} change={change}/>;
 if(c.type==='slider'){const maximum=Math.max(100,Math.ceil((c.value??50)/100)*200);return <div className="r-slider"><div className="r-row"><span>{c.text||'Adjust your constraint'}</span><input className="r-slider-number" aria-label={`${c.title} exact value`} type="number" min={0} value={c.value??50} onChange={e=>change({value:Math.max(0,Number(e.target.value))})}/></div><input aria-label={c.title} type="range" min={0} max={maximum} value={c.value??50} onChange={e=>change({value:Number(e.target.value)})}/><div className="r-scale"><span>0</span><span>{maximum.toLocaleString()}</span></div></div>}
 if(c.type==='checklist')return <><div className="r-progress"><span style={{width:`${c.items.length?c.items.filter(i=>i.done).length/c.items.length*100:0}%`}}/></div><div className="r-muted r-small">{c.items.filter(i=>i.done).length} of {c.items.length} complete</div>{c.items.map(i=><div className={'r-check '+(i.done?'is-done':'')} key={i.id}><label><input type="checkbox" checked={!!i.done} onChange={e=>update(i.id,{done:e.target.checked})}/><span>{i.label}{i.detail&&<small>{i.detail}</small>}</span></label><button className="r-icon" aria-label={`Delete ${i.label}`} onClick={()=>remove(i.id)}><X size={14}/></button></div>)}<AddItem onAdd={add}/></>;
@@ -33,6 +27,33 @@ if(c.type==='chart'){const max=Math.max(1,...c.items.map(i=>Math.abs(i.value??0)
 return null;
 }
 function ScheduleSummary({items}:{items:Item[]}){const facts=scheduleFacts(items);return <div className="r-schedule-facts"><p className="r-small r-muted">Local schedule checks · Week of {facts.weekStart??'no dates yet'} · {facts.unassigned} uncovered assignments</p>{facts.conflicts.map(message=><p role="status" className="r-feedback r-small" key={message}>{message}</p>)}<div className="r-days-off">{facts.daysOff.map(row=><span className={row.daysOff<2?'r-feedback':''} key={row.employee}>{row.employee}: {row.daysOff} days off {row.daysOff<2?'· below 2-day minimum':''}</span>)}</div><p className="r-small r-muted">Multiple assignments on one date are flagged for review; precise time overlaps require shift times.</p></div>}
-export default function WorkspaceRenderer({workspace,onChange,explain,locale='en'}:{workspace:Workspace;onChange:(workspace:Workspace)=>void;explain:boolean;locale?:'he'|'en'}){
- const visible=visibleComponents(workspace.components);
- return <WorkspaceLayout workspaceId={workspace.id} components={visible} locale={locale}>{c=><>{explain&&<p className="r-reason">{c.reason}{c.dependsOn&&` · ${locale==='he'?'מחובר אל':'Connected to'} ${workspace.components.find(d=>d.id===c.dependsOn)?.title}`}</p>}{c.dependsOn&&(()=>{const source=workspace.components.find(d=>d.id===c.dependsOn);if(!source)return null;if(source.type==='slider'&&c.type==='chart'){const sum=c.items.reduce((total,item)=>total+(item.value??0),0);const budget=source.value??0;return <div className="r-dependency" role="status">Total {sum.toLocaleString()} · Budget {budget.toLocaleString()}<span className={sum>budget?'r-feedback':'r-success'}>{sum>budget?`${(sum-budget).toLocaleString()} over budget`:`${(budget-sum).toLocaleString()} remaining`}</span><div className="r-progress"><span style={{width:`${Math.min(100,budget?sum/budget*100:0)}%`}}/></div></div>}const completed=source.type==='approval'?(source.value===1?1:0):source.items.filter(i=>i.done).length;const total=source.type==='approval'?1:source.items.length;return <div className="r-dependency" role="status">Linked to {source.title}<span>{completed}/{total} complete</span><div className="r-progress"><span style={{width:`${total?completed/total*100:0}%`}}/></div></div>})()}<Primitive c={c} change={patch=>onChange({...workspace,components:workspace.components.map(item=>item.id===c.id?{...item,...patch}:item)})}/></>}</WorkspaceLayout>}
+export default function WorkspaceRenderer({workspace,onChange,explain}:{workspace:Workspace;onChange:(workspace:Workspace)=>void;explain:boolean}){const [focus,setFocus]=useState<string|null>(null);
+const gridRef=useRef<HTMLDivElement>(null);
+const drag=useRef<{id:string;x:number;y:number;active:boolean;target:string|null}|null>(null);
+const [dragging,setDragging]=useState<string|null>(null);
+const [dropTarget,setDropTarget]=useState<string|null>(null);
+const [announcement,setAnnouncement]=useState('');
+function move(source:string,target:string){
+ const components=[...workspace.components];const from=components.findIndex(c=>c.id===source);const to=components.findIndex(c=>c.id===target);
+ if(from<0||to<0||from===to)return;
+ const [card]=components.splice(from,1);components.splice(to,0,card);
+ onChange({...workspace,components});setAnnouncement(`${card.title} moved to position ${to+1}`);
+}
+useEffect(()=>{
+ const grid=gridRef.current;if(!grid)return;
+ const measure=()=>{for(const card of Array.from(grid.children) as HTMLElement[]){if(!card.hidden)card.style.gridRowEnd=`span ${Math.ceil((card.getBoundingClientRect().height+12)/20)}`;}};
+ const observer=new ResizeObserver(measure);observer.observe(grid);for(const card of Array.from(grid.children))observer.observe(card);
+ measure();return()=>observer.disconnect();
+},[workspace.components,focus]);
+const visible=visibleComponents(workspace.components);const selected=visible.some(c=>c.id===focus)?focus:null;return <><AdaptiveOverview components={visible} focus={selected} onFocus={setFocus}/><p className="sr-only" role="status">{announcement}</p><div ref={gridRef} className="r-grid">{visible.map(c=><section key={c.id} data-component-id={c.id} hidden={selected!==null&&selected!==c.id} className={`r-card r-${c.type} ${c.span==='wide'||selected===c.id?'r-wide':''} ${dragging===c.id?'r-dragging':''} ${dropTarget===c.id?'r-drop-target':''}`}><header className="r-card-header"><button type="button" className="r-drag-handle" aria-label={`Move ${c.title}`} title="Drag to move · Arrow keys to reorder" onKeyDown={e=>{
+ if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))return;
+ e.preventDefault();const index=visible.findIndex(item=>item.id===c.id);const rtl=e.currentTarget.closest('[dir]')?.getAttribute('dir')==='rtl';
+ const previous=e.key==='ArrowUp'||e.key===(rtl?'ArrowRight':'ArrowLeft');const target=visible[index+(previous?-1:1)];if(target)move(c.id,target.id);
+}} onPointerDown={e=>{if(e.button!==0)return;e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:c.id,x:e.clientX,y:e.clientY,active:false,target:null};}} onPointerMove={e=>{
+ const state=drag.current;if(!state)return;
+ if(!state.active&&Math.hypot(e.clientX-state.x,e.clientY-state.y)<5)return;
+ state.active=true;setDragging(state.id);
+ const target=document.elementFromPoint(e.clientX,e.clientY)?.closest<HTMLElement>('[data-component-id]');
+ state.target=target&&gridRef.current?.contains(target)&&target.dataset.componentId!==state.id?target.dataset.componentId??null:null;setDropTarget(state.target);
+ const scroll=gridRef.current?.closest('.main-scroll');if(scroll){const bounds=scroll.getBoundingClientRect();if(e.clientY>bounds.bottom-60)scroll.scrollTop+=20;else if(e.clientY<bounds.top+60)scroll.scrollTop-=20;}
+}} onPointerUp={()=>{const state=drag.current;if(state?.active&&state.target)move(state.id,state.target);drag.current=null;setDragging(null);setDropTarget(null);}} onPointerCancel={()=>{drag.current=null;setDragging(null);setDropTarget(null);}} onLostPointerCapture={()=>{drag.current=null;setDragging(null);setDropTarget(null);}}><GripVertical size={16}/></button><div className="r-card-mark"><Layers size={15}/></div><h3>{c.title}</h3><span className="r-kind">{c.type}</span></header>{explain&&<p className="r-reason">{c.reason}{c.dependsOn&&` · Connected to ${workspace.components.find(d=>d.id===c.dependsOn)?.title}`}</p>}{c.dependsOn&&(()=>{const source=workspace.components.find(d=>d.id===c.dependsOn);if(!source)return null;if(source.type==='slider'&&c.type==='chart'){const sum=c.items.reduce((total,item)=>total+(item.value??0),0);const budget=source.value??0;return <div className="r-dependency" role="status">Total {sum.toLocaleString()} · Budget {budget.toLocaleString()}<span className={sum>budget?'r-feedback':'r-success'}>{sum>budget?`${(sum-budget).toLocaleString()} over budget`:`${(budget-sum).toLocaleString()} remaining`}</span><div className="r-progress"><span style={{width:`${Math.min(100,budget?sum/budget*100:0)}%`}}/></div></div>}const completed=source.type==='approval'?(source.value===1?1:0):source.items.filter(i=>i.done).length;const total=source.type==='approval'?1:source.items.length;return <div className="r-dependency" role="status">Linked to {source.title}<span>{completed}/{total} complete</span><div className="r-progress"><span style={{width:`${total?completed/total*100:0}%`}}/></div></div>})()}<Primitive c={c} change={patch=>onChange({...workspace,components:workspace.components.map(item=>item.id===c.id?{...item,...patch}:item)})}/></section>)}</div></>}
