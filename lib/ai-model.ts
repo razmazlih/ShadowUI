@@ -1,4 +1,4 @@
-const trialEndsAt = Date.parse('2026-10-19T19:08:30Z');
+const trialEndsAt = Date.parse('2026-10-19T20:06:20Z');
 
 export type AIModelConfig = {
  model: string;
