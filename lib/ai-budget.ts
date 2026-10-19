@@ -6,7 +6,7 @@ export class AIError extends Error {constructor(public status:number,message:str
 export type Ledger={spent:number;entries:Record<string,{at:number;cost:number;result?:unknown}>};
 const LedgerSchema=z.object({spent:z.number().finite().nonnegative(),entries:z.record(z.object({at:z.number().finite(),cost:z.number().finite().nonnegative(),result:z.unknown().optional()}))});
 const empty=():Ledger=>({spent:0,entries:{}});
-export function limit(){const n=Number(process.env.AI_BUDGET_USD??1);if(!Number.isFinite(n)||n<=0||n>5)throw new AIError(503,'AI budget must be greater than zero and at most $5.');return n;}
+export function limit(){const n=Number(process.env.AI_BUDGET_USD??3);if(!Number.isFinite(n)||n<=0||n>5)throw new AIError(503,'AI budget must be greater than zero and at most $5.');return n;}
 export async function transact<T>(change:(ledger:Ledger)=>T):Promise<T>{
  const configuredUrl=process.env.UPSTASH_REDIS_REST_URL;
  let url=configuredUrl,token=process.env.UPSTASH_REDIS_REST_TOKEN;

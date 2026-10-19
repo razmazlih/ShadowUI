@@ -8,7 +8,7 @@ import {classifyMessage,MessageHistorySchema} from '@/lib/message-intent';
 import {liveScheduleIntent,liveInteraction} from '@/lib/openai-planner';
 import {AIError,limit,transact} from '@/lib/ai-budget';
 export const runtime='nodejs';
-export const maxDuration=150;
+export const maxDuration=300;
 function sameOrigin(request:Request){try{const target=new URL(request.url);target.host=request.headers.get('host')??target.host;return new URL(request.headers.get('origin')??'').origin===target.origin;}catch{return false;}}
 function sessionId(request:Request){return request.headers.get('cookie')?.match(/(?:^|; )shadowui_ai=([a-f0-9-]{36})(?:;|$)/)?.[1];}
 export async function GET(request:Request){
