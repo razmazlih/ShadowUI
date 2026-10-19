@@ -14,7 +14,6 @@ const [conversations,setConversations]=useState<Record<string,Array<{role:'user'
 const history=conversations[active??'playground']??[];
 const [responseSummary,setResponseSummary]=useState('');
 const [requestHebrew,setRequestHebrew]=useState(false);
-useEffect(()=>{if(requestStatus!=='done')return;const timer=setTimeout(()=>setRequestStatus('idle'),6000);return ()=>clearTimeout(timer)},[requestStatus,responseSummary]);
 const statusRequest=useRef<Promise<void>|null>(null);
 function checkAI(){return fetch('/api/plan',{cache:'no-store'}).then(r=>r.json()).then(setAiStatus).catch(()=>setAiStatus({configured:false,storageReady:false}));}
 useEffect(()=>{if(requestedMode==='live'&&!statusRequest.current)statusRequest.current=checkAI()},[requestedMode]);
