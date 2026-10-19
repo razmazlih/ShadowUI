@@ -16,7 +16,7 @@ const workspace=planDemo('Help me study biology').workspace;
 function providerContent(content:unknown){
  const data=content as {workspace?:typeof workspace};
  if(!data.workspace?.components?.every(c=>Array.isArray(c.items)))return content;
- return {workspace:{...data.workspace,components:data.workspace.components.map(c=>({value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
+ return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
 }
 function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,'gpt-4.1-mini');assert.ok(body.max_completion_tokens<=6000);assert.equal(body.store,false);assert.equal(body.messages.length,2);if((content as {workspace?:unknown}).workspace)assert.equal(body.response_format.json_schema.strict,true);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent(content))}}],usage});};}
 test('missing key sends no request and changes no budget',async()=>{delete process.env.OPENAI_API_KEY;global.fetch=async()=>{calls++;throw new Error('unexpected');};await assert.rejects(livePlan('test',undefined,'a'),/OPENAI_API_KEY/);assert.equal(calls,0);});
@@ -56,4 +56,32 @@ test('Redis compare-and-set retries a collision without duplicating reservation'
  global.fetch=async(url,init)=>{assert.equal(url,'https://redis.invalid');const args=JSON.parse(String(init?.body));if(args[0]==='GET')return Response.json({result:stored});assert.equal(args[0],'EVAL');if(collisions-->0)return Response.json({result:0});if((stored??'')!==args[4])return Response.json({result:0});stored=args[5];mutations++;return Response.json({result:1});};
  await transact(l=>reserve(l,'request',.01));assert.equal(mutations,1);assert.equal(JSON.parse(stored!).spent,.01);
  global.fetch=async()=>new Response('unavailable',{status:503});await assert.rejects(livePlan('test',undefined,'a'),/storage/);
+});
+
+test('conversation and screen questions return replies without workspace mutations in one call',async()=>{
+ const {liveInteraction}=await import('../lib/openai-planner');
+ global.fetch=async(_url,init)=>{
+  calls++;const body=JSON.parse(String(init?.body));const context=JSON.parse(body.messages[1].content);
+  assert.deepEqual(context.visibleWorkspace,workspace);
+  assert.deepEqual(context.recentConversation,[{role:'user',content:'hello'}]);
+  assert.equal(body.response_format.json_schema.strict,true);
+  return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({intent:'workspace_question',reply:'This is your study plan.',workspace:null})}}]});
+ };
+ const result=await liveInteraction('What is on this screen?',workspace,'conversation',[{role:'user',content:'hello'}]);
+ assert.equal(result.operation,'reply');assert.equal('workspace' in result,false);assert.equal(calls,1);
+});
+
+test('non-mutating AI intents reject workspace payloads',async()=>{
+ const {liveInteraction}=await import('../lib/openai-planner');
+ const content=providerContent({workspace}) as {workspace:unknown};
+ mock({intent:'conversation',reply:'Hello',workspace:content.workspace});
+ await assert.rejects(liveInteraction('Hello',workspace,'invalid'));
+});
+
+test('explicit workspace changes validate and preserve the current workspace',async()=>{
+ const {liveInteraction}=await import('../lib/openai-planner');
+ const content=providerContent({workspace}) as {workspace:unknown};
+ mock({intent:'workspace_change',reply:'Updated the plan.',workspace:content.workspace});
+ const result=await liveInteraction('Make it one hour',workspace,'edit');
+ assert.equal(result.operation,'patch');assert.deepEqual(result.workspace,workspace);
 });

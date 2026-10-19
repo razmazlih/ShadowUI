@@ -12,7 +12,7 @@ function providerShape(shape:z.ZodRawShape){
 const ScoreSchema=z.object({criterionId:z.string(),score:z.number().min(0).max(100)}).strict();
 const ProviderItemSchema=z.object({...providerShape(ItemSchema.omit({scores:true,url:true}).shape),url:z.string().max(4000).nullable(),scores:z.array(ScoreSchema).nullable()}).strict();
 const ProviderComponentSchema=z.object({...providerShape(ComponentSchema.omit({items:true}).shape),items:z.array(ProviderItemSchema).max(60)}).strict();
-const ProviderWorkspaceSchema=z.object({workspace:z.object({
+export const ProviderWorkspaceSchema=z.object({workspace:z.object({
  id:z.string().max(100),title:z.string().max(150),description:z.string().max(1000),goal:z.string().max(4000),components:z.array(ProviderComponentSchema).min(1).max(16)
 }).strict()}).strict();
 
@@ -31,3 +31,10 @@ export function parseAIWorkspace(data:unknown){
   })
  }))});
 }
+
+export const InteractionSchema=z.object({
+ intent:z.enum(['conversation','workspace_question','workspace_change','clarification','schedule_change']),
+ reply:z.string().min(1).max(4000),
+ workspace:ProviderWorkspaceSchema.shape.workspace.nullable()
+}).strict();
+export const interactionResponseFormat={type:'json_schema',json_schema:{name:'shadowui_interaction',strict:true,schema:zodSchema(InteractionSchema).jsonSchema}};

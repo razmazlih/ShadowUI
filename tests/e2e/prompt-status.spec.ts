@@ -14,7 +14,7 @@ test('prompt shows pending, completion and failure beside the input',async({page
  const input=page.getByLabel('What do you want to accomplish?');
  await input.fill('Help me study biology');
  await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.locator('#request-status')).toContainText('Processing your request');
+ await expect(page.locator('#request-status')).toContainText('AI is working');
  await expect(input).toBeDisabled();
  finish();
  await expect(page.locator('#request-status')).toContainText('Response ready');
