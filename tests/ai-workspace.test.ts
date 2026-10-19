@@ -5,7 +5,7 @@ import {WorkspaceSchema} from '../lib/schema';
 
 function fixture(){return {workspace:{id:'workspace',title:'Trip',description:'Estimated itinerary',goal:'Plan a trip',components:[{
  id:'plan',type:'checklist',title:'Plan',reason:'Prepare the trip',span:'normal',
- criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
+ custom:null,criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
  items:[{id:'book',label:'Choose dates',url:null,detail:null,value:null,done:null,date:null,group:null,answer:null,options:null,scores:null}]
 }]}};}
 
@@ -69,4 +69,17 @@ test('canonical dependency and identity checks still apply after normalization',
  assert.equal(parseAIWorkspace(valid).components[1].dependsOn,'plan');
  const duplicates=fixture();duplicates.workspace.components.push(structuredClone(duplicates.workspace.components[0]));
  assert.throws(()=>parseAIWorkspace(duplicates),/Duplicate component IDs/);
+});
+
+test('custom provider tool survives normalization and rejects mismatched or executable definitions',()=>{
+ const data=fixture();
+ Object.assign(data.workspace.components[0],{type:'custom',items:[],custom:{purpose:'Calculate area',layout:'metrics',accent:'green',fields:[{id:'width',label:'Width',type:'number',value:'3',options:[],min:0,max:null},{id:'height',label:'Height',type:'number',value:'4',options:[],min:0,max:null}],outputs:[{id:'area',label:'Area',expression:['width','height','*'],unit:'m²'}]}});
+ const workspace=parseAIWorkspace(data);
+ assert.equal(workspace.components[0].custom?.fields[0].value,'3');
+ assert.deepEqual(WorkspaceSchema.parse(JSON.parse(JSON.stringify(workspace))),workspace);
+ const mismatch=structuredClone(data);mismatch.workspace.components[0].type='notes';
+ assert.throws(()=>parseAIWorkspace(mismatch),/Custom tools/);
+ const executable=structuredClone(data);
+ (executable.workspace.components[0] as unknown as {custom:{outputs:{expression:string[]}[]}}).custom.outputs[0].expression=['fetch(secret)'];
+ assert.throws(()=>parseAIWorkspace(executable));
 });

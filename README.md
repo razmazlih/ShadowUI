@@ -108,3 +108,9 @@ The grammar is reusable, but the hero's domain binding and constraints are imple
 - [Pre-submission checklist](docs/submission-checklist.md)
 
 Internal target: **October 21 evening, Jerusalem time**. Official rules checked October 18 state **October 23, 2026, noon PDT (22:00 Jerusalem)**; recheck before submitting. No submission, judging access, eligibility or competitive outcome is claimed. [Official rules](https://amazonappdev2026.devpost.com/rules).
+
+### Goal-specific custom tools
+
+Live AI can now create a `custom` tool when the built-in tools do not fit the requested action. It composes named number, text, select and toggle fields with validated local calculations, three layouts (form, metrics, steps), and four accents. The planner avoids default filler cards and explains each tool's purpose. Generation uses the existing single AI request and budget guard.
+
+Custom definitions are declarative data, not executable code. Calculations support bounded RPN arithmetic (+, -, *, /, min, max); division by zero and non-finite results show errors. Stable field values survive AI adaptations when compatible with new bounds/options. Browser persistence and JSON export include the definition and values. This supports local forms and scenario calculators; arbitrary apps, new network integrations, and external actions require implementation. Demo mode retains its existing deterministic tools.

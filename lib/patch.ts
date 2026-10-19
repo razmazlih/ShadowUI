@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {reconcileCustomTool} from './custom-tool';
 import {ComponentSchema, WorkspaceSchema, type Workspace, type UIComponent} from './schema';
 const Id=z.string().min(1).max(100);
 export const PatchOperationSchema=z.discriminatedUnion('op',[
@@ -24,7 +25,7 @@ export function applyPatches(previous:Workspace,operations:PatchOperation[]):Wor
 }
 function preserve(old:UIComponent,next:UIComponent):UIComponent{
  if(old.id!==next.id||old.type!==next.type)return next;
- return {...next,items:next.items.map(item=>{const saved=old.items.find(i=>i.id===item.id);return saved?{...item,done:saved.done??item.done,...(old.type==='quiz'?{group:saved.group,value:saved.value}: {})}:item;})};
+ return {...next,value:next.value??old.value,text:next.text??old.text,criteria:next.criteria??old.criteria,...(old.custom&&next.custom?{custom:reconcileCustomTool(old.custom,next.custom)}:{}),items:next.items.map(item=>{const saved=old.items.find(i=>i.id===item.id);return saved?{...saved,...item,done:saved.done??item.done,...(old.type==='quiz'?{group:saved.group,value:saved.value}: {})}:item;})};
 }
 /** Turn a validated candidate into targeted operations keyed by stable IDs. */
 export function diffWorkspace(previous:Workspace,candidate:Workspace):PatchOperation[]{
