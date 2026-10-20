@@ -18,6 +18,11 @@ export const ProviderWorkspaceSchema=z.object({workspace:z.object({
  id:z.string().max(100),title:z.string().max(150),description:z.string().max(1000),goal:z.string().max(4000),components:z.array(ProviderComponentSchema).min(1).max(16)
 }).strict()}).strict();
 
+// Learning quizzes must be complete at the provider boundary, not repaired after rendering.
+const LearningQuizSchema=ProviderComponentSchema.extend({type:z.literal('quiz'),items:z.array(ProviderItemSchema.extend({answer:z.string().min(1),detail:z.string().min(1).max(2000),options:z.array(z.string().min(1)).min(2).max(12)})).min(2).max(60)});
+const OtherLearningComponentSchema=ProviderComponentSchema.extend({type:ComponentSchema.shape.type.exclude(['quiz'])});
+export const ProviderLearningWorkspaceSchema=ProviderWorkspaceSchema.extend({workspace:ProviderWorkspaceSchema.shape.workspace.extend({components:z.array(z.union([LearningQuizSchema,OtherLearningComponentSchema])).min(1).max(16)})});
+
 export const workspaceResponseFormat={type:'json_schema',json_schema:{name:'shadowui_workspace',strict:true,schema:zodSchema(ProviderWorkspaceSchema).jsonSchema}};
 
 function omitNulls(value:Record<string,unknown>){return Object.fromEntries(Object.entries(value).filter(([,v])=>v!==null));}

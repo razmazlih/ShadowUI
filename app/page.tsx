@@ -30,7 +30,15 @@ async function checkAI():Promise<AIRuntimeStatus>{
  catch{status={configured:false,storageReady:false,simulation:false,liveEnabled:false};}
  setAiStatus(status);return status;
 }
-useEffect(()=>{if(!statusRequest.current)statusRequest.current=checkAI()},[]);
+useEffect(()=>{
+ const refresh=()=>{if(document.visibilityState==='visible')void checkAI()};
+ if(!statusRequest.current)statusRequest.current=checkAI();
+ else refresh();
+ window.addEventListener('focus',refresh);
+ document.addEventListener('visibilitychange',refresh);
+ const interval=window.setInterval(refresh,30000);
+ return ()=>{window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);window.clearInterval(interval)};
+},[]);
 useEffect(()=>{try{setSources(JSON.parse(localStorage.getItem('shadowui.sources')||'{}'))}catch{}},[]);
 useEffect(()=>{if(ready)localStorage.setItem('shadowui.sources',JSON.stringify(sources))},[sources,ready]);
 useEffect(()=>{setDomainBusy(false);setCommand(undefined)},[active]);

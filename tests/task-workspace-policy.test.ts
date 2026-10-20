@@ -1,3 +1,4 @@
+import {learningContentProblems} from '../lib/response-quality';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {enforceWorkspaceBehavior,LEARNING_PLAN_POLICY} from '../lib/task-workspace-policy';
@@ -6,7 +7,7 @@ import {seedDefinitions} from '../lib/catalog';
 import {validateTaskInstances} from '../lib/task-instance-validation';
 const seeds=seedDefinitions();
 const notes=structuredClone(seeds.find(d=>d.id==='notes')!.template);
-for(const request of ['תכין תוכנית לימוד Backend עם תרגילים','בנה תכנית לימוד מסודרת','Create a backend development learning plan','ללמוד למבחן במבוא להסתברות'])test(`learning plan requires interactive behaviors: ${request}`,()=>{
+for(const request of ['תכין תוכנית לימוד Backend עם תרגילים','בנה תכנית לימוד מסודרת','Create a backend development learning plan','ללמוד למבחן במבוא להסתברות','תלמד אותי מה זה api','Teach me what an API is'])test(`learning plan requires interactive behaviors: ${request}`,()=>{
  const contract=enforceWorkspaceBehavior(demoTaskContract(request,[notes]),request);
  assert.ok(contract.actions.some(a=>a.capability==='timeline.edit'));assert.ok(contract.actions.some(a=>a.capability==='tasks.check'));
  assert.ok(contract.constraints.includes(LEARNING_PLAN_POLICY));
@@ -30,4 +31,12 @@ test('a topic-only timeline cannot pass as exam preparation',()=>{
  assert.equal(report.valid,false);
  assert.ok(report.errors.some(e=>e.includes('worked example')));
  assert.ok(report.errors.some(e=>e.includes('explanatory feedback')));
+});
+
+test('quiz instructions cannot pass as explanatory feedback',()=>{
+ const quiz=structuredClone(seeds.find(d=>d.id==='quiz')!.template);
+ quiz.items=[{id:'a',label:'What is API?',options:['Interface','Hardware'],answer:'Interface',detail:'בחר את התשובה הנכונה.'},{id:'b',label:'Which method reads data?',options:['GET','POST'],answer:'GET',detail:'Choose the correct answer.'}];
+ assert.ok(learningContentProblems([{...notes,text:'A lesson with a concrete example.'},quiz]).some(problem=>problem.includes('explanatory feedback')));
+ quiz.items=quiz.items.map(item=>({...item,detail:'The interface lets a client request data from a server using agreed rules.'}));
+ assert.deepEqual(learningContentProblems([{...notes,text:'A lesson with a concrete example.'},quiz]),[]);
 });

@@ -1,3 +1,4 @@
 import type { NextConfig } from 'next';
-const config:NextConfig={distDir:process.env.SHADOWUI_DIST_DIR??'.next',poweredByHeader:false,devIndicators:false};
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
+const config=(phase:string):NextConfig=>({distDir:process.env.SHADOWUI_DIST_DIR??(phase===PHASE_DEVELOPMENT_SERVER?'.next-dev':'.next'),poweredByHeader:false,devIndicators:false});
 export default config;

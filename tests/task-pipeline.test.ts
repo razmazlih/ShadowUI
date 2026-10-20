@@ -33,6 +33,37 @@ test('pipeline builds one timed week from its contract and pins the stored compo
  assert.equal(result.coverage?.complete,true);assert.equal(result.validation?.valid,true);assert.deepEqual(result.workspace.components[0].catalogRef,{definitionId:'weekly_schedule',version:1});
  assert.equal(result.workspace.components[0].weeklySchedule!.days[0].events[0].start,'09:00');assert.deepEqual(h.calls,{interpret:1,populate:1,semantics:1,get:0});assert.equal(h.saved.length,0);
 });
+
+test('schema repair receives the actual invalid workspace constraints',async()=>{
+ const c=component('checklist'),contract=demoTaskContract('Track tasks',[c]),h=harness(contract,[c]);
+ const populate=h.deps.populate;let feedback='';
+ h.deps.populate=async(...args)=>{
+  if(!args[4]){
+   h.calls.populate++;
+   const invalid=WorkspaceSchema.safeParse({...draft([c]),components:[{...c,dependsOn:'missing-component'}]});
+   assert.equal(invalid.success,false);
+   if(!invalid.success)throw new AIError(502,'Invalid workspace',invalid.error);
+  }
+  feedback=args[4]??'';
+  return populate(...args);
+ };
+ const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.equal(result.operation,'create');
+ assert.match(feedback,/Unknown dependency/);
+ assert.equal(h.calls.populate,2);
+});
+
+test('assembly preserves supporting explanation components referenced by selected tools',async()=>{
+ const notes=component('notes'),quiz=component('quiz');
+ const example={...notes,id:'worked_example',text:'GET /health returns a health response.',dependsOn:notes.id};
+ quiz.dependsOn=example.id;
+ const contract=demoTaskContract('Show API reference material',[notes,quiz]),h=harness(contract,[notes,example,quiz]);
+ const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
+ assert.equal(result.operation,'create');
+ assert.ok(result.workspace?.components.some(c=>c.id===example.id&&c.text===example.text));
+ assert.equal(result.workspace?.components.find(c=>c.id===quiz.id)?.dependsOn,example.id);
+ assert.equal(h.calls.populate,1);
+});
 test('pipeline composes comparison, real formula, tasks, and a deterministic table-to-chart connection',async()=>{
  const components=['comparison','calculator','checklist','table','chart'].map(component);const table=components.find(c=>c.type==='table')!;table.items=[{id:'cost',label:'עלות נתונה',value:120}];
  const contract=demoTaskContract('Compare costs and track execution',components),h=harness(contract,components);

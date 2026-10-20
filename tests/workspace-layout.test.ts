@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { UIComponent } from '../lib/schema';
-import { automaticLayout, parseLayout, reconcileLayout } from '../lib/workspace-layout';
+import { automaticLayout, columnLayout, parseLayout, reconcileLayout } from '../lib/workspace-layout';
 
 const component = (id: string, type: UIComponent['type'] = 'chart'): UIComponent => ({ id, type, title: id, reason: '', span: 'normal', items: [] });
 
@@ -125,4 +125,29 @@ test('requested arrangement prioritizes the itinerary, applies real geometry, an
   assert.equal(JSON.stringify(components), before);
   assert.deepEqual(reconcileLayout(next, components), next);
   assert.ok(Object.values(requestedLayout(components, 320).sizes).every(size => size.columns === 12));
+});
+
+test('lessons use a continuous reading column without dashboard gaps at every breakpoint',()=>{
+ const components=[component('path','timeline'),component('explanation','notes'),component('cards','flashcards'),component('practice','checklist'),component('quiz','quiz')];
+ const original=JSON.stringify(components);
+ for(const width of [320,768,1050,1600]){
+  const layout=automaticLayout(components,width);
+  assert.deepEqual(layout.order,components.map(c=>c.id));
+  if(width<880)assert.ok(Object.values(layout.sizes).every(size=>size.columns===12));
+  else {assert.equal(layout.sizes.explanation.columns,12);assert.equal(layout.sizes.cards.columns,6);assert.equal(layout.sizes.practice.columns,6);assert.equal(layout.sizes.quiz.columns,12);}
+  assert.ok(parseLayout(layout));
+ }
+ assert.equal(JSON.stringify(components),original);
+ const fixed=automaticLayout(components);fixed.mode='fixed';fixed.sizes.quiz={columns:6,minHeight:320};
+ assert.deepEqual(reconcileLayout(fixed,components).sizes.quiz,{columns:6,minHeight:320});
+});
+
+test('column presets change geometry and survive saved-layout reconciliation',()=>{
+ const components=[component('a','notes'),component('b','quiz'),component('c','checklist')];
+ for(const columns of [1,2,3] as const){
+  const layout=columnLayout(components,columns);
+  assert.ok(Object.values(layout.sizes).every(size=>size.columns===12/columns));
+  assert.equal(layout.mode,'fixed');
+  assert.deepEqual(reconcileLayout(parseLayout(JSON.parse(JSON.stringify(layout)))!,components),layout);
+ }
 });

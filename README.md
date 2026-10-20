@@ -35,7 +35,7 @@ npm run test:e2e
 node scripts/capture-mcp-evidence.mjs
 ```
 
-Do not run `next dev` and `next build` concurrently against the same `.next` directory. The test suite uses Chrome in reduced-motion mode; normal browser operation retains subtle transitions.
+Development uses `.next-dev`, while production builds and `npm start` use `.next`, so building does not overwrite a running development server's assets. If you override `SHADOWUI_DIST_DIR`, use separate directories for development and production. The test suite uses Chrome in reduced-motion mode; normal browser operation retains subtle transitions.
 
 ## Scheduling demonstration
 

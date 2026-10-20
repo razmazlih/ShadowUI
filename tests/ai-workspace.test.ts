@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {workspaceResponseFormat,parseAIWorkspace} from '../lib/ai-workspace';
+import {workspaceResponseFormat,parseAIWorkspace,ProviderLearningWorkspaceSchema} from '../lib/ai-workspace';
 import {WorkspaceSchema} from '../lib/schema';
 
 function fixture(){return {workspace:{id:'workspace',title:'Trip',description:'Estimated itinerary',goal:'Plan a trip',components:[{
@@ -90,4 +90,16 @@ test('record cell arrays normalize to bounded numeric records and reject duplica
  assert.deepEqual(parseAIWorkspace(data).components[0].items[0].cells,{quantity:3});
  Object.assign(data.workspace.components[0].items[0],{cells:[{columnId:'quantity',value:3},{columnId:'quantity',value:4}]});
  assert.throws(()=>parseAIWorkspace(data),/Duplicate record cells/);
+});
+
+test('learning provider requires quiz answers and explanations before accepting output',()=>{
+ const data=fixture();
+ const quiz={...data.workspace.components[0],type:'quiz',items:[0,1].map(n=>({...data.workspace.components[0].items[0],id:`q${n}`,label:'What does API mean?',answer:'Application programming interface',detail:'An API defines how software requests data or operations from other software.',options:['Application programming interface','Operating system']}))};
+ const valid={workspace:{...data.workspace,components:[quiz]}};
+ assert.equal(ProviderLearningWorkspaceSchema.safeParse(valid).success,true);
+ for(const field of ['answer','detail','options']){
+  const invalid=structuredClone(valid);Object.assign(invalid.workspace.components[0].items[0],{[field]:null});
+  assert.equal(ProviderLearningWorkspaceSchema.safeParse(invalid).success,false,field);
+ }
+ assert.equal(ProviderLearningWorkspaceSchema.safeParse({workspace:{...data.workspace,components:[{...quiz,items:quiz.items.slice(0,1)}]}}).success,false);
 });

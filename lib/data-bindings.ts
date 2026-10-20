@@ -4,6 +4,10 @@ import {evaluateCustomTool} from './custom-tool';
 const PortSchema=z.object({componentId:z.string().min(1).max(100),port:z.enum(['value','text','items','customOutput','customField']),fieldId:z.string().max(64).optional()}).strict();
 export const DataBindingSchema=z.object({id:z.string().min(1).max(100),source:PortSchema,target:PortSchema,transform:z.enum(['copy','sum','count','project','filter','group']),field:z.enum(['label','detail','value','date','group']).optional(),match:z.string().max(2000).optional()}).strict();
 export type DataBinding=z.infer<typeof DataBindingSchema>;
+/** An exact copy to the same port has no effect and is not a data dependency. */
+export function withoutIdentityCopies(raw:DataBinding[]):DataBinding[]{
+ return z.array(DataBindingSchema).max(32).parse(raw).filter(b=>!(b.transform==='copy'&&b.source.componentId===b.target.componentId&&b.source.port===b.target.port&&b.source.fieldId===b.target.fieldId));
+}
 type Kind='number'|'string'|'items'|'invalid';
 function kind(c:UIComponent,port:DataBinding['source'],source:boolean):Kind{
  if(port.port==='value')return ['slider','timer','approval'].includes(c.type)?'number':'invalid';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {bindingOrder,resolveBindings,type DataBinding} from '../lib/data-bindings';
+import {bindingOrder,resolveBindings,withoutIdentityCopies,type DataBinding} from '../lib/data-bindings';
 import {seedDefinitions} from '../lib/catalog';
 import {evaluateCustomTool} from '../lib/custom-tool';
 const components=()=>seedDefinitions().filter(d=>['table','calculator','slider','notes','chart'].includes(d.id)).map(d=>({...structuredClone(d.template),id:d.id}));
@@ -36,4 +36,15 @@ test('missing source number and missing projected field cannot silently become v
  const timer={...structuredClone(seedDefinitions().find(d=>d.id==='timer')!.template),id:'timer'};nodes.push(timer);
  const result=resolveBindings({components:nodes},[bind('copy','slider','value','timer','value')]);assert.equal(result.errors.length,1);assert.equal(result.workspace.components.find(c=>c.id==='timer')!.value,undefined);
  nodes.find(c=>c.id==='table')!.items=[{id:'a',label:'A'}];assert.equal(resolveBindings({components:nodes},[bind('project','table','items','chart','items','project',{field:'date'})]).errors.length,1);
+});
+
+test('identity copies are omitted while real cycles and self transforms remain invalid',()=>{
+ const nodes=components();
+ const noops=[bind('items','table','items','table','items'),bind('text','notes','text','notes','text')];
+ assert.deepEqual(withoutIdentityCopies(noops),[]);
+ const cycle=[bind('a','table','items','chart','items'),bind('b','chart','items','table','items')];
+ assert.throws(()=>bindingOrder(nodes,withoutIdentityCopies(cycle)),/cycle/);
+ const transform=bind('projection','table','items','table','items','project',{field:'value'});
+ assert.equal(withoutIdentityCopies([transform]).length,1);
+ assert.throws(()=>bindingOrder(nodes,withoutIdentityCopies([transform])),/cycle/);
 });

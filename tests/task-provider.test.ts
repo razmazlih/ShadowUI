@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseTaskInterpretation,TaskInterpretationProviderSchema,populationFormat,reuseTaskData} from '../lib/task-ai';
+import {parseTaskInterpretation,TaskInterpretationProviderSchema,populationFormat,learningPopulationFormat,reuseTaskData} from '../lib/task-ai';
 import {demoTaskContract} from '../lib/task-engine';
 import {seedDefinitions} from '../lib/catalog';
 import {zodSchema} from 'ai';
@@ -16,7 +16,7 @@ test('provider carries stable dataset/component identity and missing-input edit 
 });
 test('population response has strict required objects including custom and record definitions',()=>{
  let count=0;function visit(value:unknown){if(!value||typeof value!=='object')return;if(Array.isArray(value)){value.forEach(visit);return;}const node=value as Record<string,unknown>;if(node.type==='object'){count++;assert.equal(node.additionalProperties,false);assert.deepEqual(new Set(node.required as string[]),new Set(Object.keys(node.properties as object)));}Object.values(node).forEach(visit);}
- visit(populationFormat.json_schema.schema);assert.ok(count>15);
+ visit(populationFormat.json_schema.schema);visit(learningPopulationFormat.json_schema.schema);assert.ok(count>15);
 });
 test('reuse never conflates independent components with the same renderer',()=>{
  const left=seedDefinitions().find(d=>d.template.type==='table')!.template;const a={...structuredClone(left),id:'a'},b={...structuredClone(left),id:'b'};

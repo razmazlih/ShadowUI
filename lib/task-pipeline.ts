@@ -11,7 +11,7 @@ import {interpretTask,populateTask} from './task-ai';
 import {WorkspaceSchema,type Workspace,type UIComponent} from './schema';
 import {applyCandidate} from './patch';
 import {evaluateCustomTool} from './custom-tool';
-import {bindingOrder,resolveBindings,type DataBinding} from './data-bindings';
+import {bindingOrder,resolveBindings,withoutIdentityCopies,type DataBinding} from './data-bindings';
 import {AIError} from './ai-budget';
 import {isNewGoal,isSchedulingGoal} from './planner';
 import {createSchedule,summarizeScheduleDraft} from './schedule';
@@ -109,7 +109,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
  const chosen=assembly.selections.map(s=>definitions.find(d=>d.id===s.definitionId&&d.version===s.definitionVersion)!);
  let generated:Awaited<ReturnType<PipelineDependencies['populate']>>;
  onProgress?.('compose');
- try{generated=await deps.populate(contract,chosen,previous,session);}catch(error){if(repairUsed||!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;generated=await deps.populate(contract,chosen,previous,session,'Repair the invalid JSON/schema from the previous response; return the required structured workspace and bindings only.');}
+ try{generated=await deps.populate(contract,chosen,previous,session);}catch(error){if(repairUsed||!(error instanceof AIError)||!(error.sourceError instanceof z.ZodError||error.sourceError instanceof SyntaxError))throw error;repairUsed=true;generated=await deps.populate(contract,chosen,previous,session,'Repair the invalid JSON/schema from the previous response; return the required structured workspace and bindings only. Validation errors: '+error.sourceError.message.slice(0,5000));}
  let final:Workspace|undefined,report:ReturnType<typeof validateTaskInstances>|undefined;
  onProgress?.('validate');
  // Exactly one focused repair; persistence is outside the retry so failed drafts are never activated.
@@ -138,12 +138,19 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
     component.recordTool=structuredClone(definition.template.recordTool);
     if(definition.template.custom&&component.custom){const values=new Map(component.custom.fields.map(f=>[f.id,f.value]));component.custom={...structuredClone(definition.template.custom),fields:definition.template.custom.fields.map(f=>({...f,value:values.get(f.id)??f.value}))};}return component;});
    next.components=attachPins(next);
+   // Supporting explanations can be distinct from the action's primary tool.
+   // Keep validated standard primitives so references and lesson content survive assembly.
+   const selectedIds=new Set(next.components.map(component=>component.id));
+   const supporting=draft.components.filter(component=>!selectedIds.has(component.id)&&component.type!=='custom'&&!component.recordTool).map(component=>{
+    const copy=structuredClone(component);delete copy.catalogRef;delete copy.editedPaths;return copy;
+   });
+   next.components.push(...supporting);
    // Provider-generated IDs are not authoritative during adaptation.
    const idMap=previous?taskInstanceIdentityMap(next,contract,previous):new Map<string,string>();
    const mapped=(id:string)=>idMap.get(id)??id;
    next.components=next.components.map(c=>({...c,id:mapped(c.id),...(c.dependsOn?{dependsOn:mapped(c.dependsOn)}:{}),...(c.visibleWhen?{visibleWhen:{...c.visibleWhen,componentId:mapped(c.visibleWhen.componentId)}}:{})}));
    next.selections=next.selections.map(selection=>({...selection,instanceId:mapped(selection.instanceId)}));next.coverage.covered=next.coverage.covered.map(entry=>({...entry,instanceId:mapped(entry.instanceId)}));
-   const bindings=draft.bindings!==undefined?draft.bindings.map(b=>({...b,source:{...b.source,componentId:mapped(b.source.componentId)},target:{...b.target,componentId:mapped(b.target.componentId)}})):inferredBindings(next.components,previous);bindingOrder(next.components,bindings);
+   const bindings=withoutIdentityCopies(draft.bindings!==undefined?draft.bindings.map(b=>({...b,source:{...b.source,componentId:mapped(b.source.componentId)},target:{...b.target,componentId:mapped(b.target.componentId)}})):inferredBindings(next.components,previous));bindingOrder(next.components,bindings);
    candidate=WorkspaceSchema.parse({...draft,id:previous?.id??draft.id,goal:previous?.goal??prompt,components:next.components,taskContract:{...contract,actions:contract.actions.map(action=>({...action,componentId:mapped(next!.coverage.covered.find(entry=>entry.actionId===action.id)?.instanceId??action.componentId??action.id)})),inputs:contract.inputs.map(input=>({...input,...(input.binding?{binding:{...input.binding,componentId:mapped(input.binding.componentId)}}:{})}))},bindings,taskReport:{...next.coverage,limitations:next.limitations}});
    candidate=previous?applyCandidate(previous,candidate):candidate;
    report=validateTaskInstances(contract,candidate.components,next.selections);

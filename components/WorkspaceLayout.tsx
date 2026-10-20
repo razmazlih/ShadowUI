@@ -1,9 +1,9 @@
 'use client';
 
 import {useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
-import {GripVertical, MoreHorizontal, MoveDiagonal2} from 'lucide-react';
+import {GripVertical, MoreHorizontal, MoveDiagonal2, SlidersHorizontal, X} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
-import {automaticLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
+import {automaticLayout, columnLayout, isLessonLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
 import {toolIcons, toolLabel} from './tool-metadata';
 
 type Size = LayoutState['sizes'][string];
@@ -18,6 +18,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const [dragging,setDragging]=useState<string|null>(null);
  const [announcement,setAnnouncement]=useState('');
  const [storageWarning,setStorageWarning]=useState(false);
+ const [density,setDensity]=useState<'compact'|'comfortable'>('compact');
  const grid=useRef<HTMLDivElement>(null);
  const gesture=useRef<Gesture|null>(null);
  const storageKey=`shadowui.layout.v1:${workspaceId}`;
@@ -25,6 +26,11 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const [rowSpans,setRowSpans]=useState<Record<string,number>>({});
  const reconciled=reconcileLayout(saved.workspaceId===workspaceId?saved.layout:automaticLayout(components),components);
  const layout=reconciled.mode==='auto'?automaticLayout(components,availableWidth):reconciled;
+ const singleColumn=layout.order.every(id=>layout.sizes[id].columns===12);
+ const reading=isLessonLayout(components)&&singleColumn;
+ const flowing=reading||singleColumn;
+ const uniform=layout.order.length?layout.sizes[layout.order[0]].columns:12;
+ const preset=layout.mode==='auto'?'auto':layout.order.every(id=>layout.sizes[id].columns===uniform)&&[4,6,12].includes(uniform)?String(12/uniform):'custom';
  const current=useRef(layout);current.current=layout;
  const composition=components.map(c=>`${c.id}:${c.type}:${c.span}`).join('|');
  useEffect(()=>{
@@ -47,7 +53,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  },[workspaceId,composition]);
  useEffect(()=>{
   let restored:LayoutState|null=null;
-  try{const raw=localStorage.getItem(storageKey);if(raw)restored=parseLayout(JSON.parse(raw));}catch{}
+  try{const raw=localStorage.getItem(storageKey);if(raw)restored=parseLayout(JSON.parse(raw));setDensity(localStorage.getItem(`${storageKey}:density`)==='comfortable'?'comfortable':'compact');}catch{}
   setSaved({workspaceId,layout:restored??automaticLayout(components),ready:true});
   setPreview(null);setTarget(null);setDragging(null);gesture.current=null;setStorageWarning(false);
   // Restore once per workspace; content edits are reconciled without resetting the layout.
@@ -71,14 +77,15 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  // Clicking a menu button must not depend on focus transfer (Safari can blur with no relatedTarget).
  useEffect(()=>{
   const closeOutside=(event:globalThis.PointerEvent)=>{
-   grid.current?.querySelectorAll<HTMLDetailsElement>('.card-layout-options[open]').forEach(menu=>{
+   grid.current?.closest('.workspace-stage')?.querySelectorAll<HTMLDetailsElement>('.card-layout-options[open], .layout-settings[open]').forEach(menu=>{
     if(event.target instanceof Node&&!menu.contains(event.target))menu.open=false;
    });
   };
   document.addEventListener('pointerdown',closeOutside);
   return ()=>document.removeEventListener('pointerdown',closeOutside);
  },[]);
- function commit(next:LayoutState){setSaved({workspaceId,layout:next,ready:true});}
+ function commit(next:LayoutState){setSaved({workspaceId,layout:next,ready:true});setAnnouncement(he?'הסידור עודכן':'Layout updated');}
+ function changeDensity(value:'compact'|'comfortable'){setDensity(value);try{localStorage.setItem(`${storageKey}:density`,value)}catch{setStorageWarning(true)}setAnnouncement(he?'צפיפות התצוגה עודכנה':'Display density updated');}
  function fixed(){return {...current.current,mode:'fixed' as const,order:[...current.current.order],sizes:Object.assign(Object.create(null),current.current.sizes)};}
  function move(id:string,to:number){const next=fixed();const from=next.order.indexOf(id);if(from<0)return;next.order.splice(from,1);next.order.splice(clamp(to,0,next.order.length),0,id);commit(next);setAnnouncement(he?'מיקום הקומפוננטה עודכן':'Component position updated');}
  function resize(id:string,size:Size){const next=fixed();next.sizes[id]={columns:clamp(size.columns,4,12),minHeight:clamp(size.minHeight,160,900)};commit(next);setAnnouncement(he?'גודל הקומפוננטה עודכן':'Component size updated');}
@@ -147,13 +154,20 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  useEffect(()=>()=>{gesture.current=null;},[]);
  const pointerHandlers={onPointerMove:update,onPointerUp:(e:PointerEvent<HTMLButtonElement>)=>finish(e),onPointerCancel:(e:PointerEvent<HTMLButtonElement>)=>finish(e,true),onLostPointerCapture:cancel,onKeyDown:(e:React.KeyboardEvent<HTMLButtonElement>)=>{if(e.key==='Escape')cancel();}};
  const byId=new Map(components.map(c=>[c.id,c]));
- return <div className="workspace-stage" dir={he?'rtl':undefined}>
-  <div className="layout-toolbar"><details className="layout-settings"><summary>{he?'סידור':'Layout'} <span>{layout.mode==='auto'?(he?'אוטומטי':'Automatic'):(he?'קבוע':'Fixed')}</span></summary><div className="layout-settings-panel"><label>{he?'מצב סידור':'Layout mode'}<select aria-label={he?'מצב סידור':'Layout mode'} value={layout.mode} onChange={event=>commit(event.target.value==='auto'?automaticLayout(components):fixed())}><option value="auto">{he?'מתעדכן אוטומטית':'Updates automatically'}</option><option value="fixed">{he?'קבוע':'Fixed'}</option></select></label><button type="button" onClick={()=>commit(automaticLayout(components))}>{he?'איפוס סידור':'Reset layout'}</button></div></details></div>
+ return <div className={`workspace-stage${reading?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':undefined}>
+  {components.length>1&&availableWidth>=680&&<div className="layout-toolbar"><details className="layout-settings" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה ועמודות':'Display & columns'}</span><span>{layout.mode==='auto'?(he?'התאמה אוטומטית':'Automatic'):(he?'מותאם אישית':'Custom')}</span></summary><div className="layout-settings-panel">
+   <div className="layout-panel-heading"><strong>{he?'איך להציג את סביבת העבודה?':'How should this workspace look?'}</strong><button type="button" className="layout-close" aria-label={he?'סגירת הגדרות תצוגה':'Close display settings'} onClick={event=>{const details=event.currentTarget.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}}}><X size={16}/></button></div>
+   <p className="layout-help">{he?'בחרו פריסה — השינוי מוצג מיד ונשמר לסביבת העבודה הזו.':'Choose an arrangement. Changes appear immediately and are saved for this workspace.'}</p>
+   <div className="layout-presets" role="group" aria-label={he?'מספר עמודות':'Column count'}>{(['auto','1','2','3'] as const).filter(value=>value!=='3'||availableWidth>=1050).map(value=><button key={value} type="button" aria-pressed={preset===value} onClick={()=>commit(value==='auto'?automaticLayout(components,availableWidth):columnLayout(components,Number(value) as 1|2|3))}><span className={`layout-preview preview-columns-${value}`} aria-hidden="true">{Array.from({length:value==='auto'?3:Number(value)},(_,index)=><i key={index}/>)}</span><span>{value==='auto'?(he?'אוטומטי':'Automatic'):value==='1'?(he?'עמודה אחת':'One column'):value==='2'?(he?'שתי עמודות':'Two columns'):(he?'שלוש עמודות':'Three columns')}</span></button>)}</div>
+   <p className="layout-help">{he?'באוטומטי: הסברים מקבלים רוחב לקריאה; כלי תרגול מוצגים זה לצד זה כשיש מקום. במסך צר העמודות מצטמצמות.':'Automatic gives explanations room to read and places practice tools side by side when space allows. Narrow screens use fewer columns.'}</p>
+   <span className="layout-field-label">{he?'מרווחים בין התכנים':'Content spacing'}</span><div className="layout-density" role="group" aria-label={he?'צפיפות':'Density'}>{(['compact','comfortable'] as const).map(value=><button type="button" key={value} aria-pressed={density===value} onClick={()=>changeDensity(value)}>{value==='compact'?(he?'צפוף':'Compact'):(he?'מרווח':'Comfortable')}</button>)}</div>
+  </div></details></div>}
+  {announcement&&<p className="layout-feedback" role="status">{announcement}</p>}
   {storageWarning&&<p className="r-feedback r-small" role="status">{he?'לא ניתן לשמור את הסידור בדפדפן הזה. הוא יישמר כל עוד העמוד פתוח.':'This browser could not save the layout. It will last while this page stays open.'}</p>}
-  <div className="workspace-surface"><div className={`r-grid${components.every(c=>rowSpans[c.id])?' masonry-ready':''}`} ref={grid}>{layout.order.map((id,index)=>{
+  <div className="workspace-surface"><div className={`r-grid${!flowing&&components.every(c=>rowSpans[c.id])?' masonry-ready':''}`} ref={grid}>{layout.order.map((id,index)=>{
    const c=byId.get(id);if(!c)return null;
    const Icon=toolIcons[c.type];const size=preview?.id===id?preview.size:layout.sizes[id];
-   return <section key={id} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridRowEnd:rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
+   return <section key={id} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridRowEnd:!flowing&&rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
     <header className="r-card-header"><div className="r-card-mark"><Icon size={18} aria-hidden="true"/></div><h3>{c.title}</h3><div className="card-controls"><button className="drag-handle" type="button" aria-label={`${he?'הזזת':'Move'} ${c.title}`} title={he?'גרירה לשינוי מיקום':'Drag to move'} aria-keyshortcuts="ArrowUp ArrowDown Home End" onPointerDown={event=>begin(event,id,'move')} {...pointerHandlers} onKeyDown={event=>{
       if(event.key==='Escape'){cancel();return;}
       const position=event.key==='ArrowUp'?index-1:event.key==='ArrowDown'?index+1:event.key==='Home'?0:event.key==='End'?layout.order.length-1:null;
@@ -165,6 +179,6 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
     </div></details></div></header><div className="r-card-content">{children(c)}</div><button className="resize-handle desktop-layout-control" type="button" aria-label={`${he?'שינוי גודל':'Resize'} ${c.title}`} title={`${he?'שינוי גודל':'Resize'} · ${toolLabel(c.type,locale)}`} onPointerDown={event=>begin(event,id,'resize')} {...pointerHandlers}><MoveDiagonal2 size={15}/></button>
    </section>;
   })}</div>{!components.length&&<p className="workspace-empty" role="status">{he?'אין כרגע כלים זמינים להצגה. אפשר לעדכן את הבקשה למטה.':'No tools are currently available. Update your request below.'}</p>}</div>
-  <span className="sr-only" role="status">{announcement}</span>
+
  </div>;
 }

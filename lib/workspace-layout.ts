@@ -10,15 +10,24 @@ const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const safeId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100 && !forbiddenKeys.has(id);
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 
+/** Reading and practice form a lesson, rather than independent dashboard panels. */
+export function isLessonLayout(components: UIComponent[]): boolean {
+  return components.some(component => component.type === 'notes')
+    && components.some(component => ['quiz', 'flashcards'].includes(component.type))
+    && components.every(component => ['notes', 'timeline', 'checklist', 'quiz', 'flashcards', 'links', 'timer'].includes(component.type));
+}
+
 /** Geometry depends only on component identity, type and declared span, never edited data. */
 export function automaticLayout(components: UIComponent[], availableWidth = Infinity): LayoutState {
   const sizes: LayoutState['sizes'] = Object.create(null);
   const order = components.map(component => component.id);
+  const lesson = isLessonLayout(components);
   for (const component of components) {
     let columns = 6;
     if (['calendar', 'weekly_schedule', 'kanban', 'table', 'comparison'].includes(component.type) || (component.type === 'timeline' && component.span === 'wide')) columns = 12;
     else if (component.type === 'notes') columns = 8;
     else if (['checklist', 'slider', 'timer', 'approval'].includes(component.type)) columns = 4;
+    if (lesson) columns = ['notes', 'timeline', 'links'].includes(component.type) || availableWidth < 880 ? 12 : 6;
     if (availableWidth < 680) columns = 12;
     else if (availableWidth < 1050 && columns < 12) columns = 6;
     sizes[component.id] = { columns, minHeight: 160 };
@@ -28,7 +37,8 @@ export function automaticLayout(components: UIComponent[], availableWidth = Infi
   let rowCount = 0;
   let lastId: string | undefined;
   const closeRow = () => {
-    if (lastId && rowCount > 1) sizes[lastId].columns += Math.min(12 - used, Math.max(0, 8 - sizes[lastId].columns));
+    if (lastId && lesson) sizes[lastId].columns += 12 - used;
+    else if (lastId && rowCount > 1) sizes[lastId].columns += Math.min(12 - used, Math.max(0, 8 - sizes[lastId].columns));
   };
   for (const id of order) {
     const columns = sizes[id].columns;
@@ -44,6 +54,12 @@ export function automaticLayout(components: UIComponent[], availableWidth = Infi
   }
   closeRow();
   return { mode: 'auto', order, sizes };
+}
+
+export function columnLayout(components: UIComponent[], columns: 1 | 2 | 3): LayoutState {
+  const layout = automaticLayout(components);
+  for (const id of layout.order) layout.sizes[id] = { columns: 12 / columns, minHeight: 160 };
+  return { ...layout, mode: 'fixed' };
 }
 
 export function reconcileLayout(state: LayoutState, components: UIComponent[]): LayoutState {
