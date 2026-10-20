@@ -5,8 +5,8 @@ import {WorkspaceSchema} from '../lib/schema';
 
 function fixture(){return {workspace:{id:'workspace',title:'Trip',description:'Estimated itinerary',goal:'Plan a trip',components:[{
  id:'plan',type:'checklist',title:'Plan',reason:'Prepare the trip',span:'normal',
- custom:null,weeklySchedule:null,criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
- items:[{id:'book',label:'Choose dates',url:null,detail:null,value:null,done:null,date:null,group:null,answer:null,options:null,scores:null}]
+ custom:null,recordTool:null,weeklySchedule:null,criteria:null,value:null,text:null,dependsOn:null,visibleWhen:null,
+ items:[{id:'book',label:'Choose dates',url:null,detail:null,value:null,done:null,date:null,group:null,answer:null,options:null,scores:null,cells:null}]
 }]}};}
 
 test('strict provider schema requires every declared property and disallows arbitrary properties',()=>{
@@ -82,4 +82,12 @@ test('custom provider tool survives normalization and rejects mismatched or exec
  const executable=structuredClone(data);
  (executable.workspace.components[0] as unknown as {custom:{outputs:{expression:string[]}[]}}).custom.outputs[0].expression=['fetch(secret)'];
  assert.throws(()=>parseAIWorkspace(executable));
+});
+
+test('record cell arrays normalize to bounded numeric records and reject duplicate columns',()=>{
+ const data=fixture();Object.assign(data.workspace.components[0],{type:'table',recordTool:{columns:[{id:'quantity',label:'Quantity'}],outputs:[]}});
+ Object.assign(data.workspace.components[0].items[0],{cells:[{columnId:'quantity',value:3}]});
+ assert.deepEqual(parseAIWorkspace(data).components[0].items[0].cells,{quantity:3});
+ Object.assign(data.workspace.components[0].items[0],{cells:[{columnId:'quantity',value:3},{columnId:'quantity',value:4}]});
+ assert.throws(()=>parseAIWorkspace(data),/Duplicate record cells/);
 });

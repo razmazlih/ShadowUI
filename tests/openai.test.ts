@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {livePlan,liveScheduleIntent} from '../lib/openai-planner';
+import {mockedPaidModule} from './helpers/mocked-paid-module';
+const {livePlan,liveScheduleIntent,liveInteraction}=mockedPaidModule<typeof import('../lib/openai-planner')>(path.resolve('lib/openai-planner.ts'));
 import {transact,reserve,AIError} from '../lib/ai-budget';
 import {planDemo} from '../lib/planner';
 import {createSchedule} from '../lib/schedule';
@@ -17,7 +18,7 @@ const workspace=planDemo('Help me study biology').workspace;
 function providerContent(content:unknown){
  const data=content as {workspace?:typeof workspace};
  if(!data.workspace?.components?.every(c=>Array.isArray(c.items)))return content;
- return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({custom:null,weeklySchedule:null,value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
+ return {...data,workspace:{...data.workspace,components:data.workspace.components.map(c=>({custom:null,recordTool:null,weeklySchedule:null,value:null,text:null,criteria:null,dependsOn:null,visibleWhen:null,...c,items:c.items.map(i=>({detail:null,url:null,value:null,done:null,date:null,group:null,answer:null,options:null,cells:null,...i,scores:i.scores?Object.entries(i.scores).map(([criterionId,score])=>({criterionId,score})):null}))}))}};
 }
 function mock(content:unknown,usage={prompt_tokens:1200,completion_tokens:900}){global.fetch=async(_url,init)=>{calls++;const body=JSON.parse(String(init?.body));assert.equal(body.model,activeAIModel().model);assert.ok(body.max_completion_tokens<=90000);assert.equal(body.store,false);assert.equal(body.messages.length,2);if((content as {workspace?:unknown}).workspace)assert.equal(body.response_format.json_schema.strict,true);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(providerContent(content))}}],usage});};}
 test('missing key sends no request and changes no budget',async()=>{delete process.env.OPENAI_API_KEY;global.fetch=async()=>{calls++;throw new Error('unexpected');};await assert.rejects(livePlan('test',undefined,'a'),/OPENAI_API_KEY/);assert.equal(calls,0);});
@@ -60,7 +61,6 @@ test('Redis compare-and-set retries a collision without duplicating reservation'
 });
 
 test('conversation and screen questions return replies without workspace mutations in one call',async()=>{
- const {liveInteraction}=await import('../lib/openai-planner');
  global.fetch=async(_url,init)=>{
   calls++;const body=JSON.parse(String(init?.body));const context=JSON.parse(body.messages[1].content);
   assert.deepEqual(context.visibleWorkspace,workspace);
@@ -73,14 +73,12 @@ test('conversation and screen questions return replies without workspace mutatio
 });
 
 test('non-mutating AI intents reject workspace payloads',async()=>{
- const {liveInteraction}=await import('../lib/openai-planner');
  const content=providerContent({workspace}) as {workspace:unknown};
  mock({intent:'conversation',reply:'Hello',workspace:content.workspace});
  await assert.rejects(liveInteraction('Hello',workspace,'invalid'));
 });
 
 test('explicit workspace changes validate and preserve the current workspace',async()=>{
- const {liveInteraction}=await import('../lib/openai-planner');
  const content=providerContent({workspace}) as {workspace:unknown};
  mock({intent:'workspace_change',reply:'Updated the plan.',workspace:content.workspace});
  const result=await liveInteraction('Make it one hour',workspace,'edit');

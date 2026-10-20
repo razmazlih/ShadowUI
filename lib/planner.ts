@@ -8,6 +8,7 @@ const rows=(labels:string[], extras:Partial<Item>={}):Item[]=>labels.map((label,
 function component(type:UIComponent['type'],title:string,reason:string,items:Item[]=[],extra:Partial<UIComponent>={}):UIComponent{return {id:type,type,title,reason,span:'normal',items,...extra};}
 export function isNewGoal(prompt:string,current?:Workspace):boolean {
  if(!current)return true;
+ if(/^(?:סביבת עבודה חדשה|מטרה חדשה|התחל מחדש|התחילי מחדש|מעכשיו|עכשיו עזור)(?:\s|$)/u.test(prompt))return true;
  if(/^(new workspace|start over|new goal|now help me|now (?:i want|i need)|switch to|מעכשיו|עכשיו עזור)\b/i.test(prompt))return true;
  const next=features(prompt), old=features(current.goal);
  return (Object.keys(next) as (keyof Features)[]).some(k=>!['dates','budget'].includes(k)&&next[k]&&!old[k]);
@@ -71,6 +72,8 @@ function weeklySchedule(prompt:string):UIComponent{
  const mondayFirst=/weekly|week|plan my week/i.test(prompt)&&!/[א-ת]/u.test(prompt);
  const offset=mondayFirst?(start.getDay()+6)%7:start.getDay();start.setDate(start.getDate()-offset);
  if(/next week|שבוע הבא/i.test(prompt))start.setDate(start.getDate()+7);
+ const requested=prompt.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+ if(requested){const parsed=new Date(`${requested}T12:00:00`);if(!Number.isFinite(parsed.getTime())||`${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`!==requested)throw new Error('Invalid requested date');start.setTime(parsed.getTime());}
  const localISO=(date:Date)=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
  const weekStart=localISO(start);
  const days=Array.from({length:7},(_,index)=>{const date=new Date(start);date.setDate(start.getDate()+index);return {date:localISO(date),events:[] as Array<{id:string;title:string;start:string;end:string}>};});

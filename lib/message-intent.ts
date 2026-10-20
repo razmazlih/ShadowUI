@@ -20,7 +20,7 @@ export function classifyMessage(prompt:string,current?:Workspace):MessageIntent 
  if(question||screen||/^(?:hi|hello|hey|thanks|thank you|שלום|היי|תודה|בוקר טוב|ערב טוב)(?:[\s!,.]|$)/i.test(text)||/^(?:explain|tell me|הסבר|תסביר|ספר לי)(?:\s|$)/i.test(text)){
   if(screen&&!current)return {kind:'clarify',reply:he?'אין כרגע סביבת עבודה פתוחה שאפשר להתייחס אליה. איזה מסך או תוכן התכוונת?':'There is no open workspace to refer to. Which screen or content do you mean?'};
   if(current&&(screen||/זה|זאת|these|this|that/i.test(text)))return {kind:'conversation',reply:he?`בסביבת העבודה ״${current.title}״ מוצגים: ${current.components.map(c=>c.title).join('، ')}. זו תשובת דמו המבוססת על מבנה סביבת העבודה; לא שיניתי דבר. אפשר לציין רכיב ושאלה ממוקדת.`:`The workspace “${current.title}” contains: ${current.components.map(c=>c.title).join(', ')}. This demo response uses the workspace structure; nothing was changed. Name a component and a specific question.`};
-  return {kind:'conversation',reply:he?'אפשר להמשיך לדבר כאן בלי לשנות את סביבת העבודה. במצב דמו אין תשובת AI חופשית; לתשובה מלאה אפשר לבחור Live AI.':'You can continue the conversation without changing the workspace. Demo mode does not generate free-form AI answers; select Live AI for a full response.'};
+  return {kind:'conversation',reply:he?'אפשר להמשיך לדבר כאן בלי לשנות את סביבת העבודה. הבנת השפה בהדמיה; תארו מטרה או בקשו שינוי מפורש בכלים.':'You can continue without changing the workspace. Language understanding is simulated; describe a goal or request a specific tool change.'};
  }
  // A fresh concrete objective retains the original composer behavior. In an
  // existing workspace, unexplained fragments need a target before mutation.

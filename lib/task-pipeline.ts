@@ -20,8 +20,8 @@ const cache:EmbeddingCache={
  async get(key){const vector=await getCatalogEmbeddingCache(key);return vector?{model:'text-embedding-3-small',fingerprint:key.split(':').at(-1)!,vector}:null;},
  async put(key,record){await setCatalogEmbeddingCache(key,record.vector);}
 };
-function formulaSignature(component:UIComponent){return JSON.stringify({type:component.type,purpose:component.type==='custom'?undefined:component.title,fields:component.custom?.fields.map(({value:_,...field})=>field),outputs:component.custom?.outputs});}
-function privateDefinition(component:UIComponent,contract:TaskContract,session:string,missing:string[]):ComponentDefinition{
+function formulaSignature(component:UIComponent){return JSON.stringify({type:component.type,recordTool:component.recordTool,purpose:component.type==='custom'?undefined:component.title,fields:component.custom?.fields.map(({value:_,...field})=>field),outputs:component.custom?.outputs});}
+export function privateDefinition(component:UIComponent,contract:TaskContract,session:string,missing:string[]):ComponentDefinition{
  const stamp=new Date().toISOString();
  const template=structuredClone(component);delete template.catalogRef;delete template.editedPaths;delete template.dependsOn;delete template.visibleWhen;
  // Reusable definition never carries the user's populated field values.
@@ -39,6 +39,24 @@ function privateDefinition(component:UIComponent,contract:TaskContract,session:s
  const aliases=missing.filter(c=>!primitiveCapabilities(template.type).includes(c)&&!(/^(calculate|collect)\./.test(c)&&template.type==='custom'));
  const id=`generated_${createHash('sha256').update(session+JSON.stringify([...missing].sort())+formulaSignature(template)).digest('hex').slice(0,32)}`;
  return ComponentDefinitionSchema.parse({id,version:1,name:component.title,description:component.reason||'Private task-specific declarative workspace tool',categories:[template.type],tags:[template.type],capabilities:[...new Set(missing)],actions:[...new Set(missing)],capabilityBindings:aliases.map(capability=>({capability,primitiveCapability:canonical})),limitations:['Local interactive workspace only; user inputs remain editable. No external actions are executed.'],inputSchema:primitiveInputSchema(template.type),outputSchema:outputSchema(template.type),stateSchema:primitiveStateSchema(template.type),template,examples:[],nonFitExamples:['External execution or live data retrieval'],source:'ai',status:'draft',scope:'private',ownerSession:session,support:{hebrew:true,rtl:true,mobile:true,accessibility:false},createdAt:stamp,updatedAt:stamp});
+}
+/** Match task identity before renderer identity so independent datasets cannot swap edits. */
+export function taskInstanceIdentityMap(assembly:TaskAssembly,contract:TaskContract,previous:Workspace):Map<string,string>{
+ const ids=new Map<string,string>(),used=new Set<string>();
+ for(const selection of assembly.selections){
+  const component=assembly.components.find(c=>c.id===selection.instanceId)!;
+  const actions=contract.actions.filter(action=>selection.actionIds.includes(action.id));
+  const explicit=actions.flatMap(action=>action.componentId?[action.componentId]:[]);
+  const datasets=actions.flatMap(action=>action.datasetId?[action.datasetId]:[]);
+  const priorActions=previous.taskContract?.actions.filter(old=>datasets.includes(old.datasetId??''))??[];
+  const priorIds=(previous.taskReport?.covered??[]).filter(entry=>priorActions.some(action=>action.id===entry.actionId)).map(entry=>entry.instanceId);
+  const preferred=[...explicit,...priorIds,...datasets,component.id];
+  const compatible=(candidate:UIComponent)=>!used.has(candidate.id)&&candidate.type===component.type;
+  let old=preferred.map(id=>previous.components.find(candidate=>candidate.id===id&&compatible(candidate))).find(Boolean);
+  if(!old&&!explicit.length&&!datasets.length)old=previous.components.find(candidate=>compatible(candidate)&&candidate.catalogRef?.definitionId===selection.definitionId&&candidate.catalogRef.version===selection.definitionVersion)??previous.components.find(candidate=>compatible(candidate)&&!candidate.catalogRef);
+  if(old){used.add(old.id);ids.set(component.id,old.id);}
+ }
+ return ids;
 }
 function attachPins(assembly:TaskAssembly){
  return assembly.components.map(component=>{const selection=assembly.selections.find(s=>s.instanceId===component.id)!;return {...component,catalogRef:{definitionId:selection.definitionId,version:selection.definitionVersion}};});
@@ -105,7 +123,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
     if(/(?:^|[._-])(?:export|import|convert|search|fetch|browse|upload|download|run|execute|code|send|pay|purchase|book|deploy)(?:[._-]|$)/i.test(action.capability))throw new Error(`No validated local executor for ${action.capability}`);
     const kinds:Record<string,UIComponent['type'][]>= {custom:['custom'],schedule:['weekly_schedule'],comparison:['comparison'],number:['custom','slider','timer','chart'],text:['notes','custom'],items:['table','checklist','kanban','timeline','calendar','flashcards','quiz','chart','links','approval']};
     const compatible=(c:UIComponent)=>(!action.inputKind||kinds[action.inputKind]?.includes(c.type))&&(!action.capability.startsWith('calculate.')||c.type==='custom');
-    const component=unused.find(c=>c.id===action.id&&compatible(c))??unused.find(compatible);
+    const component=unused.find(c=>c.id===(action.componentId??action.id)&&compatible(c))??unused.find(compatible);
     if(!component)throw new Error(`Generate an actual interactive component for ${action.id}: ${action.description}`);
     unused.splice(unused.indexOf(component),1);
     const definition=privateDefinition(component,contract,session,[missing.capability]);
@@ -116,16 +134,16 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
    if(next.coverage.missing.some(m=>!contract.actions.find(a=>a.id===m.actionId)?.external))throw new Error('Generated components must cover every local task action');
    // Keep trusted formulas and renderer types. AI supplies instance data, never replaces a catalog algorithm.
    next.components=next.components.map(component=>{const selection=next!.selections.find(s=>s.instanceId===component.id)!;const definition=provisional.find(d=>d.id===selection.definitionId&&d.version===selection.definitionVersion)!;
+    component.recordTool=structuredClone(definition.template.recordTool);
     if(definition.template.custom&&component.custom){const values=new Map(component.custom.fields.map(f=>[f.id,f.value]));component.custom={...structuredClone(definition.template.custom),fields:definition.template.custom.fields.map(f=>({...f,value:values.get(f.id)??f.value}))};}return component;});
    next.components=attachPins(next);
    // Provider-generated IDs are not authoritative during adaptation.
-   const idMap=new Map<string,string>(),usedOld=new Set<string>();
-   if(previous)for(const selection of next.selections){const component=next.components.find(c=>c.id===selection.instanceId)!;const old=previous.components.find(c=>!usedOld.has(c.id)&&c.type===component.type&&c.catalogRef?.definitionId===selection.definitionId&&c.catalogRef.version===selection.definitionVersion)??previous.components.find(c=>!usedOld.has(c.id)&&c.type===component.type&&!c.catalogRef);if(old){usedOld.add(old.id);idMap.set(component.id,old.id);}}
+   const idMap=previous?taskInstanceIdentityMap(next,contract,previous):new Map<string,string>();
    const mapped=(id:string)=>idMap.get(id)??id;
    next.components=next.components.map(c=>({...c,id:mapped(c.id),...(c.dependsOn?{dependsOn:mapped(c.dependsOn)}:{}),...(c.visibleWhen?{visibleWhen:{...c.visibleWhen,componentId:mapped(c.visibleWhen.componentId)}}:{})}));
    next.selections=next.selections.map(selection=>({...selection,instanceId:mapped(selection.instanceId)}));next.coverage.covered=next.coverage.covered.map(entry=>({...entry,instanceId:mapped(entry.instanceId)}));
    const bindings=draft.bindings!==undefined?draft.bindings.map(b=>({...b,source:{...b.source,componentId:mapped(b.source.componentId)},target:{...b.target,componentId:mapped(b.target.componentId)}})):inferredBindings(next.components,previous);bindingOrder(next.components,bindings);
-   candidate=WorkspaceSchema.parse({...draft,id:previous?.id??draft.id,goal:previous?.goal??prompt,components:next.components,taskContract:contract,bindings,taskReport:{...next.coverage,limitations:next.limitations}});
+   candidate=WorkspaceSchema.parse({...draft,id:previous?.id??draft.id,goal:previous?.goal??prompt,components:next.components,taskContract:{...contract,actions:contract.actions.map(action=>({...action,componentId:mapped(next!.coverage.covered.find(entry=>entry.actionId===action.id)?.instanceId??action.componentId??action.id)})),inputs:contract.inputs.map(input=>({...input,...(input.binding?{binding:{...input.binding,componentId:mapped(input.binding.componentId)}}:{})}))},bindings,taskReport:{...next.coverage,limitations:next.limitations}});
    candidate=previous?applyCandidate(previous,candidate):candidate;
    report=validateTaskInstances(contract,candidate.components,next.selections);
    const missingIds=new Set(next.coverage.missing.map(m=>m.actionId));const blockingErrors=report.errors.filter(error=>![...missingIds].some(id=>error.startsWith(`${id}:`)));

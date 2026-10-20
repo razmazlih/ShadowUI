@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import {assertPaidAIAllowed} from './ai-policy';
 import { AIError, reserve, transact } from './ai-budget';
 
 export type EmbeddingRecord = { model: 'text-embedding-3-small'; fingerprint: string; vector: number[] };
@@ -12,6 +13,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 /** Shared cache is for definition metadata only. Private query text never enters it. */
 export async function embedText(text: string, options: { session: string; cache?: EmbeddingCache; publicDefinition?: { id: string; version: number } }): Promise<EmbeddingRecord> {
+  assertPaidAIAllowed();
   if (!text.trim() || text.length > 12000) throw new AIError(413, 'Embedding text must contain 1–12000 characters.');
   if (!process.env.OPENAI_API_KEY) throw new AIError(503, 'Semantic search requires a server OpenAI key.');
   const fingerprint = createHash('sha256').update(model + text).digest('hex');
@@ -41,6 +43,7 @@ export async function embedText(text: string, options: { session: string; cache?
   }
 }
 export async function semanticScores(query: string, definitions: Array<{ id:string; version:number; name:string; description:string; capabilities:string[]; examples:string[]; scope?:string }>, session:string, cache?:EmbeddingCache): Promise<Record<string,number>> {
+  assertPaidAIAllowed();
   if (!process.env.OPENAI_API_KEY) throw new AIError(503, 'Semantic search requires a server OpenAI key.');
   const documents = definitions.slice(0,32).map(definition => {
     const text = [definition.name, definition.description, ...definition.capabilities, ...definition.examples].join('\n').slice(0,12000);

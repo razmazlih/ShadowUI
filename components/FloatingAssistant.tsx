@@ -6,7 +6,7 @@ import AIProgress,{type AIPhase} from './AIProgress';
 
 type Turn={role:'user'|'assistant';content:string};
 export default function FloatingAssistant({history,composer,he,busy,error,onRetry,phase}:{history:Turn[];composer:ReactNode;he:boolean;busy:boolean;error:string;onRetry:()=>void;phase:AIPhase}){
- const [size,setSize]=useState<'mini'|'compact'|'expanded'>('compact');
+ const [size,setSize]=useState<'mini'|'compact'|'expanded'>('mini');
  const end=useRef<HTMLDivElement>(null);
  const root=useRef<HTMLDivElement>(null);
  const launcher=useRef<HTMLButtonElement>(null);

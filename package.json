@@ -10,7 +10,8 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "test:catalog": "node scripts/test-catalog-emulators.mjs",
-    "verify:task-live": "node --import tsx scripts/verify-task-flow.ts --live"
+    "verify:task-live": "node --import tsx scripts/verify-task-flow.ts --live",
+    "dev:simulation": "node scripts/dev-simulation.mjs"
   },
   "dependencies": {
     "ai": "^6.0.0",

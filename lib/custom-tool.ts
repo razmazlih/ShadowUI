@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/);
-const operators = new Set(['+', '-', '*', '/', 'min', 'max']);
+const operators = new Set(['+', '-', '*', '/', 'min', 'max', 'gt', 'lt', 'eq', 'if', 'days_between']);
 const numericToken = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const FieldSchema = z.object({
   id: identifier, label: z.string().min(1).max(160),
@@ -34,7 +34,7 @@ export const CustomToolSchema = z.object({
   for (const [index, output] of tool.outputs.entries()) {
     let depth = 0;
     for (const token of output.expression) {
-      if (operators.has(token)) { if (depth < 2) { depth = -1; break; } depth--; }
+      if (operators.has(token)) { const arity=token==='if'?3:2; if (depth < arity) { depth = -1; break; } depth-=arity-1; }
       else if (numericFields.has(token) || (numericToken.test(token) && Number.isFinite(Number(token)))) depth++;
       else { depth = -1; break; }
     }
@@ -57,9 +57,10 @@ export function evaluateCustomTool(tool: CustomTool): CustomToolResult[] {
     let error: string | null = null;
     for (const token of output.expression) {
       if (!operators.has(token)) { stack.push(values.has(token) ? values.get(token)! : Number(token)); continue; }
+      if(token==='if'){const otherwise=stack.pop()!,whenTrue=stack.pop()!,condition=stack.pop()!;stack.push(condition!==0?whenTrue:otherwise);continue;}
       const right = stack.pop()!, left = stack.pop()!;
       if (token === '/' && right === 0) { error = 'לא ניתן לחלק באפס'; break; }
-      const value = token === '+' ? left + right : token === '-' ? left - right : token === '*' ? left * right : token === '/' ? left / right : token === 'min' ? Math.min(left, right) : Math.max(left, right);
+      const value = token === '+' ? left + right : token === '-' ? left - right : token === '*' ? left * right : token === '/' ? left / right : token==='gt' ? Number(left>right) : token==='lt' ? Number(left<right) : token==='eq' ? Number(left===right) : token==='days_between' ? (right-left)/86400000 : token === 'min' ? Math.min(left, right) : Math.max(left, right);
       if (!Number.isFinite(value)) { error = 'התוצאה מחוץ לטווח המספרי'; break; }
       stack.push(value);
     }

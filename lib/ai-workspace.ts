@@ -10,7 +10,8 @@ function providerShape(shape:z.ZodRawShape){
   field instanceof z.ZodDefault?field.removeDefault():field])) as z.ZodRawShape;
 }
 const ScoreSchema=z.object({criterionId:z.string(),score:z.number().min(0).max(100)}).strict();
-const ProviderItemSchema=z.object({...providerShape(ItemSchema.omit({scores:true,url:true}).shape),url:z.string().max(4000).nullable(),scores:z.array(ScoreSchema).nullable()}).strict();
+const CellSchema=z.object({columnId:z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),value:z.number().finite()}).strict();
+const ProviderItemSchema=z.object({...providerShape(ItemSchema.omit({scores:true,url:true,cells:true}).shape),url:z.string().max(4000).nullable(),scores:z.array(ScoreSchema).nullable(),cells:z.array(CellSchema).max(16).nullable()}).strict();
 const ProviderComponentSchema=z.object({...providerShape(ComponentSchema.omit({items:true,catalogRef:true,editedPaths:true}).shape),items:z.array(ProviderItemSchema).max(60)}).strict();
 export const ProviderWorkspaceSchema=z.object({workspace:z.object({
  id:z.string().max(100),title:z.string().max(150),description:z.string().max(1000),goal:z.string().max(4000),components:z.array(ProviderComponentSchema).min(1).max(16)
@@ -27,7 +28,9 @@ export function parseAIWorkspace(data:unknown){
   ...omitNulls(component),items:(component.items as Array<Record<string,unknown>>).map(item=>{
    const scores=item.scores as Array<z.infer<typeof ScoreSchema>>|null;
    if(scores&&new Set(scores.map(s=>s.criterionId)).size!==scores.length)throw new Error('Duplicate criterion scores');
-   return {...omitNulls(item),...(scores?{scores:Object.fromEntries(scores.map(s=>[s.criterionId,s.score]))}:{})};
+   const cells=item.cells as Array<z.infer<typeof CellSchema>>|null;
+   if(cells&&new Set(cells.map(cell=>cell.columnId)).size!==cells.length)throw new Error('Duplicate record cells');
+   return {...omitNulls(item),...(cells?{cells:Object.fromEntries(cells.map(cell=>[cell.columnId,cell.value]))}:{}),...(scores?{scores:Object.fromEntries(scores.map(s=>[s.criterionId,s.score]))}:{})};
   })
  }))});
 }

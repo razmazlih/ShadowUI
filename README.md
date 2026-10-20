@@ -2,7 +2,13 @@
 
 **When the work changes, the interaction should change with it.** ShadowUI is an adaptive software prototype: express an objective, work inside a composed interface, change the situation, compare solutions, and confirm a verifiable result.
 
-The primary use case is repairing a small team's weekly shift plan after availability changes. It demonstrates a narrower hypothesis than “AI builds any app”: observable work state can determine when a calendar should give way to a decision surface and then a confirmation surface. This is a product hypothesis, not a proven competitive advantage.
+ShadowUI composes interactive tools around goals across scheduling, source-based learning, budgets, comparisons, inventory, documents, and bounded calculations. Task coverage, input readiness, and user-reviewed completion are separate states. Follow-up edits retain compatible work, and the latest local workspace edit can be undone.
+
+**Runtime modes:** `AI_ENABLED=false` keeps the no-cost local simulation. With explicit server configuration `AI_ENABLED=true`, a server OpenAI key, Firebase and durable budget storage, the same validation pipeline uses real AI for task interpretation and component generation. Ordinary edits and calculations remain local. Failed or unavailable live AI does not silently fall back to simulation.
+
+Private validated tools are reusable. With the demo Firebase emulators running, sanitized candidates enter `/admin/components` for authenticated review, simulated edit proposals, and explicit approval into a separate shared definition. Configured hosted environments use real Firebase storage and verified administrator authentication; local emulators remain available for testing. See [local setup and review](docs/local-simulation.md).
+
+See [current verification and limits](docs/adaptive-workspace-verification.md).
 
 ## Task-aware catalog
 
@@ -17,7 +23,7 @@ npm ci
 npm run dev
 ```
 
-Open [ShadowUI](http://localhost:3000). **Local demo** needs no API key. It uses clearly labeled example data and limited deterministic intent rules. For direct OpenAI planning, configure server-only `OPENAI_API_KEY`, restart and select **Live AI**. Live AI temporarily uses `gpt-6.1-sol` through 2026-10-19 22:08:30 Asia/Jerusalem, then automatically returns to `gpt-4.1-mini`. Production also needs shared durable budget storage: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, or `AI_STATE_DIR` on a persistent shared volume. Without durable storage production Live AI fails closed; a serverless `/tmp` directory is not sufficient. See [AI operations](docs/ai-operations.md) for setup, costs and safety limits. Demo remains available without credentials.
+Open [ShadowUI](http://localhost:3000). The workspace works without API keys, using browser storage for workspaces and an ignored local file for reusable private definitions. For the full Firebase catalog and administrator workflow, use `npm run dev:simulation` and its local emulator identity. Existing production credentials are not used.
 
 ```sh
 npm run typecheck
@@ -31,7 +37,7 @@ node scripts/capture-mcp-evidence.mjs
 
 Do not run `next dev` and `next build` concurrently against the same `.next` directory. The test suite uses Chrome in reduced-motion mode; normal browser operation retains subtle transitions.
 
-## Known-good hero path
+## Scheduling demonstration
 
 1. Choose **Build a conflict-free week**, or type “Organize next week's shifts for six employees, including Daniel.” The roster is an editable October 19–23, 2026 fixture.
 2. In availability controls, choose Daniel and **2026-10-21**, then **Mark unavailable**. The server detects Daniel's conflicting assignment. The interface automatically focuses on eligible replacement comparisons; no AI call or extra “build a conflict UI” instruction is needed.
@@ -43,7 +49,7 @@ The prompt also supports the explicit constraint “Daniel cannot work Wednesday
 
 ## Hosted demonstration
 
-On non-loopback browser hosts, scheduling runs as a browser-local demo using the same deterministic constraints. Schedule history, revisions and demo confirmation records are saved in localStorage for that browser and origin. They are not backend receipts, are not shared across devices, and disappear when browser data is cleared. Cross-tab writes are not transactionally coordinated. Hosted scheduling does not invoke MCP; the real loopback MCP path remains available when running locally. Live AI requires separately configured server credentials and has not been enabled by deployment alone.
+On non-loopback browser hosts, scheduling runs as a browser-local demo using the same deterministic constraints. Schedule history, revisions and demo confirmation records are saved in localStorage for that browser and origin. They are not backend receipts, are not shared across devices, and disappear when browser data is cleared. Cross-tab writes are not transactionally coordinated. Hosted scheduling does not invoke MCP; the real loopback MCP path remains available when running locally. Paid AI is blocked in the current local simulation phase.
 
 ## Architecture and persistence
 
@@ -90,7 +96,7 @@ Mutating calls carry `expectedRevision` and `actionId`. Previews carry a revisio
 
 This unauthenticated demo accepts **loopback hosts only** and rejects cross-origin requests. It is a genuine locally self-hosted MCP flow, **not** a public Alexa+ service. Remote judging access requires an explicitly prepared hosted demonstration or authorized secure deployment. No physical Alexa+ execution, account connection or certification is claimed. [Protocol reference](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
-## Evidence and evaluation
+## Earlier evidence and evaluation
 
 - [Verified implementation and boundaries](docs/verification.md): 32 logic tests, 12 browser checks and production build passed.
 - [Recorded actual HTTP MCP exchanges](docs/evidence/mcp-flow.json): discovery, blocked invalid commit, nonmutating preview, applied repair, confirmed receipt, duplicate-action replay and reinspection. All roster data is synthetic.
@@ -115,6 +121,6 @@ Internal target: **October 21 evening, Jerusalem time**. Official rules checked 
 
 ### Goal-specific custom tools
 
-Live AI can now create a `custom` tool when the built-in tools do not fit the requested action. It composes named number, text, select and toggle fields with validated local calculations, three layouts (form, metrics, steps), and four accents. The planner avoids default filler cards and explains each tool's purpose. Generation uses the existing single AI request and budget guard.
+The simulated provider can create a `custom` tool when the built-in tools do not fit the requested action. It composes named number, text, select and toggle fields with validated local calculations, three layouts (form, metrics, steps), and four accents. The planner avoids default filler cards and explains each tool's purpose. Generation in this phase uses no model request.
 
-Custom definitions are declarative data, not executable code. Calculations support bounded RPN arithmetic (+, -, *, /, min, max); division by zero and non-finite results show errors. Stable field values survive AI adaptations when compatible with new bounds/options. Browser persistence and JSON export include the definition and values. This supports local forms and scenario calculators; arbitrary apps, new network integrations, and external actions require implementation. Demo mode retains its existing deterministic tools.
+Custom definitions are declarative data, not executable code. Calculations support bounded RPN arithmetic (+, -, *, /, min, max); division by zero and non-finite results show errors. Stable field values survive AI adaptations when compatible with new bounds/options. Browser persistence and JSON export include the definition and values. This supports local forms and scenario calculators; arbitrary apps, new network integrations, and external actions require implementation. The simulation also exercises private creation, persistence, and reuse through injected providers.

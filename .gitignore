@@ -16,3 +16,5 @@ firestore-debug.log
 ui-debug.log
 
 .next-*
+
+.DS_Store

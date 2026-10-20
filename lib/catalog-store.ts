@@ -1,5 +1,6 @@
 import {ComponentDefinitionSchema,seedDefinitions,validateDefinition,type ComponentDefinition,type CatalogRevision} from './catalog';
 import {catalogDatabase} from './firebase-admin';
+import {enqueueComponentReview} from './component-review-store';
 import {createHash} from 'node:crypto';
 import type {EmbeddingCache} from './semantic-search';
 
@@ -68,7 +69,9 @@ export async function rollbackDefinition(id:string,version:number,access:Catalog
 export async function saveGeneratedDefinition(input:ComponentDefinition,session:string){
  const draft=await saveDefinition({...input,source:'ai',scope:'private',ownerSession:session,status:'draft'}, {session});
  const validation=validateDefinition(draft);if(!validation.valid)return {definition:draft,validation};
- return {definition:await setDefinitionStatus(draft.id,'active',{session,includeDrafts:true}),validation};
+ const definition=await setDefinitionStatus(draft.id,'active',{session,includeDrafts:true});
+ await enqueueComponentReview(definition);
+ return {definition,validation};
 }
 /** Cache only public catalog-description embeddings, never user query vectors or private data. */
 export async function getCatalogEmbeddingCache(key:string):Promise<number[]|null>{

@@ -4,6 +4,7 @@ import { TaskContractSchema } from '../lib/task-contract';
 import { demoTaskContract,assembleTask,rankTaskCandidates } from '../lib/task-engine';
 import { seedDefinitions } from '../lib/catalog';
 import { cosineSimilarity } from '../lib/semantic-search';
+import {mockedPaidModule} from './helpers/mocked-paid-module';
 const definitions=()=>seedDefinitions();
 const contract=()=>demoTaskContract('השווה והכן רשימת עבודה',definitions().filter(d=>['comparison','checklist'].includes(d.id)).map(d=>d.template));
 
@@ -36,7 +37,7 @@ test('semantic cosine rejects invalid vectors and treats orthogonal vectors dist
 
 test('embedding search batches cache misses and never caches private definitions globally',async()=>{
  const {mkdtemp,rm}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
- const {semanticScores}=await import('../lib/semantic-search');
+ const {resolve}=await import('node:path');const {semanticScores}=mockedPaidModule<typeof import('../lib/semantic-search')>(resolve('lib/semantic-search.ts'));
  const dir=await mkdtemp(join(tmpdir(),'shadowui-task-embeddings-'));
  const saved={key:process.env.OPENAI_API_KEY,state:process.env.AI_STATE_DIR,budget:process.env.AI_BUDGET_USD};const originalFetch=globalThis.fetch;
  process.env.OPENAI_API_KEY='test-key';process.env.AI_STATE_DIR=dir;process.env.AI_BUDGET_USD='1';

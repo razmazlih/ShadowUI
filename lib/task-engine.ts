@@ -32,11 +32,12 @@ export function rankTaskCandidates(contract: TaskContract, definitions: Selectab
   }).filter(candidate => candidate.actionIds.length > 0).sort((a, b) => b.score - a.score || a.definition.id.localeCompare(b.definition.id));
 }
 function formulaSignature(component:UIComponent):string {
-  return JSON.stringify({fields:component.custom?.fields.map(field=>({id:field.id,type:field.type})).sort((a,b)=>a.id.localeCompare(b.id)),outputs:component.custom?.outputs.map(output=>({id:output.id,expression:output.expression})).sort((a,b)=>a.id.localeCompare(b.id))});
+  return JSON.stringify({recordTool:component.recordTool,fields:component.custom?.fields.map(field=>({id:field.id,type:field.type})).sort((a,b)=>a.id.localeCompare(b.id)),outputs:component.custom?.outputs.map(output=>({id:output.id,expression:output.expression})).sort((a,b)=>a.id.localeCompare(b.id))});
 }
-function instanceData(definition:SelectableDefinition,data:UIComponent[],used:UIComponent[]):UIComponent|undefined {
+function instanceData(definition:SelectableDefinition,data:UIComponent[],used:UIComponent[], componentId?:string):UIComponent|undefined {
+  if(componentId)return data.find(component=>component.id===componentId&&component.type===definition.template.type&&!used.some(instance=>instance.id===component.id));
   const candidates=data.filter(component=>component.type===definition.template.type&&!used.some(instance=>instance.id===component.id));
-  const sameFormula=(component:UIComponent)=>component.type!=='custom'||formulaSignature(component)===formulaSignature(definition.template);
+  const sameFormula=(component:UIComponent)=>component.type!=='custom'&&!component.recordTool&&!definition.template.recordTool||formulaSignature(component)===formulaSignature(definition.template);
   return candidates.find(component=>component.catalogRef?.definitionId===definition.id&&component.catalogRef.version===definition.version)
     ??candidates.find(component=>component.id===definition.template.id)
     ??candidates.find(sameFormula);
@@ -48,10 +49,13 @@ export function assembleTask(raw: TaskContract, definitions: SelectableDefinitio
   while (remaining.size && selections.length < 16) {
     const next = candidates.map(candidate => ({ ...candidate, actionIds: candidate.actionIds.filter(id => remaining.has(id)) })).filter(candidate => candidate.actionIds.length).sort((a, b) => b.actionIds.length - a.actionIds.length || b.score - a.score)[0];
     if (!next) break;
-    const source = instanceData(next.definition,options.componentData??[],components);
+    // Explicit datasets represent distinct editable work even when capabilities coincide.
+    const firstAction=contract.actions.find(action=>action.id===next.actionIds[0])!;
+    next.actionIds=next.actionIds.filter(id=>{const action=contract.actions.find(entry=>entry.id===id)!;return action.datasetId===firstAction.datasetId&&action.componentId===firstAction.componentId;});
+    const source = instanceData(next.definition,options.componentData??[],components,firstAction.componentId);
     const instanceId = source?.id ?? `task_${next.definition.id.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selections.length + 1}`;
     const trustedCustom=source?.custom&&next.definition.template.custom?reconcileCustomTool(source.custom,next.definition.template.custom):next.definition.template.custom;
-    const component = ComponentSchema.parse({ ...structuredClone(next.definition.template), ...source, ...(trustedCustom?{custom:trustedCustom}:{}), id: instanceId, catalogRef: {definitionId:next.definition.id,version:next.definition.version} });
+    const component = ComponentSchema.parse({ ...structuredClone(next.definition.template), ...source, ...(trustedCustom?{custom:trustedCustom}:{}),recordTool:structuredClone(next.definition.template.recordTool), id: instanceId, catalogRef: {definitionId:next.definition.id,version:next.definition.version} });
     components.push(component);
     selections.push({ definitionId: next.definition.id, definitionVersion: next.definition.version, instanceId, actionIds: next.actionIds, score: next.score });
     for (const actionId of next.actionIds) { remaining.delete(actionId); covered.push({ actionId, instanceId, capability: contract.actions.find(action => action.id === actionId)!.capability }); }
@@ -62,6 +66,22 @@ export function assembleTask(raw: TaskContract, definitions: SelectableDefinitio
 /** Explicitly a fallback derived from existing local UI behavior, never a claim of AI interpretation. */
 export function demoTaskContract(objective: string, components: UIComponent[]): TaskContract {
   const capabilities: Record<UIComponent['type'], string> = { checklist:'tasks.check', kanban:'tasks.organize', comparison:'compare.options', custom:'calculate.formula', table:'data.table.edit', notes:'notes.edit', flashcards:'study.flashcards', quiz:'study.quiz', chart:'data.chart', links:'links.open', timer:'time.track', approval:'decision.approve', slider:'input.range', timeline:'timeline.edit', calendar:'schedule.events.edit', weekly_schedule:'schedule.events.edit' };
-  const actions = components.map((component, i) => ({ id:`action_${i + 1}`, capability:capabilities[component.type], description:component.reason || component.title, external:false }));
+  const actions = components.map((component, i) => ({ id:`action_${i + 1}`, capability:capabilities[component.type], description:component.reason || component.title, datasetId:component.id, external:false }));
   return TaskContractSchema.parse({ objective, actions, deliverables: actions.map(action => ({ id:`deliverable_${action.id}`, label:action.description, actionIds:[action.id] })), inputs:[], constraints:['פירוש הדגמה דטרמיניסטי המבוסס על הרכיבים הקיימים'], successCriteria:['כל פעולה נדרשת מכוסה ברכיב אינטראקטיבי מאומת'], subtasks:actions.map(action => ({ id:`subtask_${action.id}`, label:action.description, actionIds:[action.id], dependsOn:[] })) });
+}
+
+/** Coverage is available UI support; readiness and verified outcomes are separate facts. */
+export type TaskProgressEvidence = {
+  completedActionIds?: string[];
+  constraintsSatisfied?: boolean;
+  successCriteriaSatisfied?: boolean;
+};
+export function evaluateTaskReadiness(raw:TaskContract,coverage:TaskCoverage,evidence:TaskProgressEvidence={}) {
+  const task=TaskContractSchema.parse(raw);
+  const missingInputs=task.inputs.filter(input=>input.required&&(!input.available||input.value===undefined||input.value===null||typeof input.value==='string'&&!input.value.trim())).map(input=>input.id);
+  const completed=new Set((evidence.completedActionIds??[]).filter(id=>task.actions.some(action=>action.id===id)&&coverage.covered.some(item=>item.actionId===id)));
+  const blockedSubtasks=task.subtasks.filter(subtask=>subtask.dependsOn.some(id=>!task.subtasks.find(entry=>entry.id===id)!.actionIds.every(actionId=>completed.has(actionId)))).map(subtask=>subtask.id);
+  const ready=coverage.complete&&missingInputs.length===0&&!task.clarification;
+  const complete=ready&&task.actions.every(action=>completed.has(action.id))&&(!task.constraints.length||evidence.constraintsSatisfied===true)&&evidence.successCriteriaSatisfied===true;
+  return {ready,complete,missingInputs,blockedSubtasks,completedActionIds:[...completed],needsClarification:!!task.clarification,needsConstraintVerification:task.constraints.length>0&&evidence.constraintsSatisfied!==true,needsSuccessVerification:evidence.successCriteriaSatisfied!==true};
 }

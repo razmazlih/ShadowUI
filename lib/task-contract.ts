@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 export const TaskInputKindSchema = z.enum(['items', 'number', 'text', 'schedule', 'comparison', 'custom']);
 const Id = z.string().min(1).max(100);
-export const TaskActionSchema = z.object({ id: Id, capability: z.string().min(1).max(100), description: z.string().min(1).max(1000), inputKind: TaskInputKindSchema.optional(), external: z.boolean().default(false) }).strict();
+export const TaskActionSchema = z.object({ id: Id, capability: z.string().min(1).max(100), description: z.string().min(1).max(1000), inputKind: TaskInputKindSchema.optional(), datasetId: Id.optional(), componentId: Id.optional(), external: z.boolean().default(false) }).strict();
 export const TaskContractSchema = z.object({
   objective: z.string().min(1).max(4000),
   deliverables: z.array(z.object({ id: Id, label: z.string().min(1).max(500), actionIds: z.array(Id).min(1).max(32) }).strict()).min(1).max(32),
   actions: z.array(TaskActionSchema).min(1).max(32),
-  inputs: z.array(z.object({ id: Id, label: z.string().min(1).max(300), kind: TaskInputKindSchema, required: z.boolean(), available: z.boolean(), value: z.unknown().optional() }).strict()).max(60),
+  inputs: z.array(z.object({ id: Id, label: z.string().min(1).max(300), kind: TaskInputKindSchema, required: z.boolean(), available: z.boolean(), value: z.unknown().optional(), binding:z.object({componentId:Id,port:z.enum(['text','items','customField']),fieldId:Id.optional()}).strict().optional() }).strict()).max(60),
   constraints: z.array(z.string().max(1000)).max(30), successCriteria: z.array(z.string().min(1).max(1000)).min(1).max(30),
   subtasks: z.array(z.object({ id: Id, label: z.string().min(1).max(500), actionIds: z.array(Id).max(32), dependsOn: z.array(Id).max(32) }).strict()).max(32),
   clarification: z.string().min(1).max(1000).optional(),

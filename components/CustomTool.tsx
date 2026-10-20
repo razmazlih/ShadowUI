@@ -5,10 +5,11 @@ import type { CustomTool as CustomToolDefinition } from '../lib/custom-tool';
 import { CustomToolSchema, evaluateCustomTool } from '../lib/custom-tool';
 import './custom-tool.css';
 
-export default function CustomTool({ tool, onChange, locale = 'en' }: {
+export default function CustomTool({ tool, onChange, locale = 'en', readOnlyFields = [] }: {
   tool: CustomToolDefinition;
   onChange: (tool: CustomToolDefinition) => void;
   locale?: 'he' | 'en';
+  readOnlyFields?: string[];
 }) {
   const prefix = useId();
   const he = locale === 'he';
@@ -40,9 +41,9 @@ export default function CustomTool({ tool, onChange, locale = 'en' }: {
           : '';
         return <div className={`custom-tool-field${field.type === 'toggle' ? ' custom-tool-field--toggle' : ''}`} key={field.id}>
           <label htmlFor={id}>{tool.layout === 'steps' && <span className="custom-tool-step" aria-hidden="true">{index + 1}</span>}<span>{field.label}</span></label>
-          {field.type === 'toggle' ? <input id={id} type="checkbox" checked={field.value === 'true'} onChange={event => update(field.id, String(event.target.checked))} />
-            : field.type === 'select' ? <select id={id} value={field.value} onChange={event => update(field.id, event.target.value)}>{field.options.map(option => <option key={option} value={option}>{option}</option>)}</select>
-            : <input id={id} type={field.type === 'number' ? 'number' : 'text'} value={field.value} min={field.type === 'number' ? field.min ?? undefined : undefined} max={field.type === 'number' ? field.max ?? undefined : undefined} step={field.type === 'number' ? 'any' : undefined} maxLength={field.type === 'text' ? 1000 : undefined} aria-invalid={invalidNumber || undefined} aria-describedby={rangeHint || invalidNumber ? hintId : undefined} onChange={event => update(field.id, event.target.value)} />}
+          {field.type === 'toggle' ? <input disabled={readOnlyFields.includes(field.id)} id={id} type="checkbox" checked={field.value === 'true'} onChange={event => update(field.id, String(event.target.checked))} />
+            : field.type === 'select' ? <select disabled={readOnlyFields.includes(field.id)} id={id} value={field.value} onChange={event => update(field.id, event.target.value)}>{field.options.map(option => <option key={option} value={option}>{option}</option>)}</select>
+            : <input disabled={readOnlyFields.includes(field.id)} id={id} type={field.type === 'number' ? 'number' : 'text'} value={field.value} min={field.type === 'number' ? field.min ?? undefined : undefined} max={field.type === 'number' ? field.max ?? undefined : undefined} step={field.type === 'number' ? 'any' : undefined} maxLength={field.type === 'text' ? 1000 : undefined} aria-invalid={invalidNumber || undefined} aria-describedby={rangeHint || invalidNumber ? hintId : undefined} onChange={event => update(field.id, event.target.value)} />}
           {(rangeHint || invalidNumber) && <small id={hintId} className={invalidNumber ? 'custom-tool-error' : 'custom-tool-hint'}>{invalidNumber ? (he ? 'יש להזין מספר תקין בטווח המותר.' : 'Enter a valid number within the allowed range.') : rangeHint}</small>}
         </div>;
       })}

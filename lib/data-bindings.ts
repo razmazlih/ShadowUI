@@ -2,7 +2,7 @@ import {z} from 'zod';
 import type {Workspace, UIComponent} from './schema';
 import {evaluateCustomTool} from './custom-tool';
 const PortSchema=z.object({componentId:z.string().min(1).max(100),port:z.enum(['value','text','items','customOutput','customField']),fieldId:z.string().max(64).optional()}).strict();
-export const DataBindingSchema=z.object({id:z.string().min(1).max(100),source:PortSchema,target:PortSchema,transform:z.enum(['copy','sum','count','project']),field:z.enum(['label','detail','value','date','group']).optional()}).strict();
+export const DataBindingSchema=z.object({id:z.string().min(1).max(100),source:PortSchema,target:PortSchema,transform:z.enum(['copy','sum','count','project','filter','group']),field:z.enum(['label','detail','value','date','group']).optional(),match:z.string().max(2000).optional()}).strict();
 export type DataBinding=z.infer<typeof DataBindingSchema>;
 type Kind='number'|'string'|'items'|'invalid';
 function kind(c:UIComponent,port:DataBinding['source'],source:boolean):Kind{
@@ -22,7 +22,7 @@ export function bindingOrder(components:UIComponent[],raw:DataBinding[]):DataBin
   const from=nodes.get(b.source.componentId),to=nodes.get(b.target.componentId);
   if(!from||!to)throw new Error('Binding references an unknown component');
   const a=kind(from,b.source,true),target=kind(to,b.target,false);
-  const output=b.transform==='count'?(a==='items'?'number':'invalid'):b.transform==='sum'?(a==='items'?'number':'invalid'):b.transform==='project'?(a==='items'&&b.field?'items':'invalid'):a;
+  const output=b.transform==='count'?(a==='items'?'number':'invalid'):b.transform==='sum'?(a==='items'?'number':'invalid'):['project','filter','group'].includes(b.transform)?(a==='items'&&b.field&&(b.transform!=='filter'||b.match!==undefined)?'items':'invalid'):a;
   if(output==='invalid'||target!==output)throw new Error('Binding input/output schemas are incompatible');
   const key=`${to.id}:${b.target.port}:${b.target.fieldId??''}`;
   if(targets.has(key))throw new Error('Multiple writers for one binding input');targets.add(key);
@@ -44,6 +44,8 @@ export function resolveBindings<T extends Pick<Workspace,'components'>>(workspac
   if(b.transform==='count')value=(value as unknown[]).length;
   if(b.transform==='sum'){const rows=value as UIComponent['items'];if(rows.some(row=>!Number.isFinite(row.value)))throw new Error('All summed rows need a finite numeric value');value=rows.reduce((n,row)=>n+row.value!,0);}
   if(b.transform==='project')value=(value as UIComponent['items']).map(row=>{const v=row[b.field!];if(v===undefined)throw new Error('Projected field is missing');return {id:row.id,label:String(v),...(typeof v==='number'?{value:v}:{})};});
+  if(b.transform==='filter')value=(value as UIComponent['items']).filter(row=>row[b.field!]!==undefined&&String(row[b.field!])===b.match);
+  if(b.transform==='group'){const groups=new Map<string,number>();for(const row of value as UIComponent['items']){const key=row[b.field!];if(key===undefined)throw new Error('Grouped field is missing');const label=String(key);groups.set(label,(groups.get(label)??0)+1);}value=[...groups].map(([label,count],index)=>({id:`group_${index}`,label,value:count}));}
   const targetKind=kind(to,b.target,false);
   if(targetKind==='number'&&(typeof value!=='number'||!Number.isFinite(value)))throw new Error('Binding result is not finite');
   if(targetKind==='string'&&(typeof value!=='string'||value.length>(b.target.port==='customField'?2000:5000)))throw new Error('Binding text does not match the target schema');
