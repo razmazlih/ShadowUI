@@ -11,13 +11,16 @@ function fixture(){
  const assembly=assembleTask(contract,definitions,{componentData:[table,chart]});const bindings:DataBinding[]=[{id:'cost-copy',source:{componentId:table.id,port:'items'},target:{componentId:chart.id,port:'items'},transform:'copy'}];
  return WorkspaceSchema.parse({id:'bound-workspace',title:'סביבת עלויות',description:'נתונים סינתטיים לבדיקת דפדפן',goal:contract.objective,components:assembly.components,taskContract:contract,taskReport:{...assembly.coverage,limitations:assembly.limitations},bindings});
 }
-test('contract coverage and real local binding remain visible and persisted without more AI requests',async({page})=>{
+test('task contract and local bindings persist without a prominent status panel or more AI requests',async({page})=>{
  let calls=0;const workspace=fixture();
- await page.route('**/api/plan',route=>{if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true,spent:0,limit:1}});calls++;return route.fulfill({json:{workspace,mode:'live',operation:'create',explanation:'כלים מקומיים מוכנים; שליחת תשלום אינה מחוברת.',budget:{spent:0,limit:1,warning:false}}});});
+ await page.route('**/api/plan',route=>{if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true,liveEnabled:true,simulation:false,spent:0,limit:1}});calls++;return route.fulfill({json:{workspace,mode:'live',operation:'create',explanation:'כלים מקומיים מוכנים; שליחת תשלום אינה מחוברת.',budget:{spent:0,limit:1,warning:false}}});});
  await page.goto('/');await page.getByLabel('What do you want to accomplish?').fill(workspace.goal);await page.getByRole('button',{name:'Build workspace'}).click();
- const summary=page.locator('.task-contract-summary');await expect(summary).toBeVisible();await expect(summary).toContainText(workspace.taskContract!.objective);await expect(summary).toContainText('2/3');await expect(summary.locator('.task-contract-limitations')).toContainText('לא בוצעה');
- await summary.locator('summary').click();await expect(summary).toContainText('שליחת תשלום בפועל');await expect(summary).toContainText(/לא מכוסה|Not covered/);
+ await expect(page.locator('.task-contract-summary')).toHaveCount(0);
+ const stored=await page.evaluate(()=>{const state=JSON.parse(localStorage.getItem('shadowui.v1')!);return state.workspaces.find((w:{id:string})=>w.id===state.active);});
+ expect(stored.taskContract.objective).toBe(workspace.taskContract!.objective);
+ expect(stored.taskReport.complete).toBe(false);
+ expect(stored.taskReport.limitations.join(' ')).toContain('לא בוצעה');
  const input=page.getByRole('spinbutton',{name:'Value עלות'}),chart=page.locator('.r-chart input[type="number"]');await expect(chart).toHaveValue('120');await expect(chart).toBeDisabled();await input.fill('275');await expect(chart).toHaveValue('275');expect(calls).toBe(1);
- await page.reload();await expect(page.getByRole('spinbutton',{name:'Value עלות'})).toHaveValue('275');await expect(page.locator('.r-chart input[type="number"]')).toHaveValue('275');await expect(page.locator('.task-contract-summary')).toContainText('2/3');expect(calls).toBe(1);
+ await page.reload();await expect(page.getByRole('spinbutton',{name:'Value עלות'})).toHaveValue('275');await expect(page.locator('.r-chart input[type="number"]')).toHaveValue('275');await expect(page.locator('.task-contract-summary .task-status-panel')).toBeHidden();expect(calls).toBe(1);
  await page.setViewportSize({width:320,height:780});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
 });

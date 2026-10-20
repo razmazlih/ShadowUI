@@ -1,0 +1,29 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+
+test('workspace toolbar exports a complete PNG and only keeps explanation and export actions',async({page})=>{
+ await page.route('**/api/plan',route=>route.fulfill({json:{configured:false,storageReady:true,simulation:true,liveEnabled:false}}));
+ await page.addInitScript(()=>localStorage.setItem('shadowui.v1',JSON.stringify({active:'image-test',workspaces:[{id:'image-test',title:'לומדים מה זה API',description:'הסבר ברור, דוגמה ותרגול להבנת התקשורת בין תוכנות.',goal:'תלמד אותי על API',components:[{id:'notes',type:'notes',title:'איך תוכנות מדברות זו עם זו?',reason:'הסבר המושגים לפני התרגול.',span:'wide',items:[],text:'API הוא ממשק שמאפשר לתוכנות לבקש מידע או פעולה מתוכנה אחרת.\n\nלקוח (Client) שולח בקשה לשרת (Server). השרת מעבד אותה ומחזיר תגובה. נקודת הקצה, Endpoint, היא הכתובת שאליה נשלחת הבקשה.\n\nדוגמה בדיונית ללימוד:\nGET /weather?city=TelAviv\n\nתגובה לדוגמה:\n{"temperature": 24, "unit": "C"}'},{id:'quiz',type:'quiz',title:'בדקו מה הבנתם',reason:'תרגול המושגים באמצעות דוגמה.',span:'normal',items:[{id:'get',label:'איזו שיטה מבקשת לקרוא מידע?',options:['GET','POST'],answer:'GET',detail:'GET מיועדת לבקש מידע ממשאב. POST שולחת נתונים לעיבוד.'},{id:'client',label:'מי שולח את הבקשה?',options:['הלקוח','השרת'],answer:'הלקוח',detail:'הלקוח פונה לשרת ומבקש ממנו את המידע.'}]}]}]})));
+ await page.goto('/');
+ const actions=page.locator('.workspace-tools');
+ await expect(page.locator('.workspace h1')).toHaveCount(0);
+ await expect(page.locator('.workspace > .workspace-notice')).toHaveCount(0);
+ await expect(page.locator('.breadcrumb')).toContainText('לומדים מה זה API');
+ await expect(actions.getByRole('button')).toHaveCount(2);
+ await expect(actions.getByText('פרטי המשימה')).toHaveCount(0);
+ const why=actions.getByRole('button',{name:'למה נבחרו הכלים האלה?'});
+ await why.click();await expect(why).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.r-reason').first()).toBeVisible();
+ await page.getByRole('textbox',{name:'איך תוכנות מדברות זו עם זו?'}).fill('API מעודכן: לקוח שולח בקשה לשרת ומקבל תגובת JSON.\n\nGET /weather?city=TelAviv\n{"temperature": 24}');
+ const pending=page.waitForEvent('download');
+ await actions.getByRole('button',{name:'Export',exact:true}).click();
+ const download=await pending;
+ expect(download.suggestedFilename()).toBe('לומדים מה זה API.png');
+ await download.saveAs('/tmp/shadowui-workspace-export.png');
+ const bytes=await readFile('/tmp/shadowui-workspace-export.png');
+ expect(bytes.subarray(0,8).toString('hex')).toBe('89504e470d0a1a0a');
+ expect(bytes.readUInt32BE(16)).toBeGreaterThanOrEqual(1200);
+ expect(bytes.readUInt32BE(20)).toBeGreaterThan(1000);
+ await expect(actions.getByRole('button',{name:'Export',exact:true})).toBeEnabled();
+ await expect(page.getByRole('textbox',{name:'איך תוכנות מדברות זו עם זו?'})).toHaveValue(/API מעודכן/);
+});

@@ -23,7 +23,7 @@ function paidTraffic(page:Page){
  return requests;
 }
 
-test('real simulation inventory computes per-item shortage, restores edits, and undoes changes at 320px RTL',async({page})=>{
+test('real simulation inventory computes per-item shortage, restores edits, and preserves changes at 320px RTL',async({page})=>{
  const paid=paidTraffic(page);
  await compose(page,'ניהול מלאי ציוד למתנדבים');
  const stock=tool(page,'ציוד וביקוש');
@@ -38,8 +38,8 @@ test('real simulation inventory computes per-item shortage, restores edits, and 
  await page.reload();
  await expect(available).toHaveValue('10');await expect(needed).toHaveValue('8');await expect(shortage).toHaveText('0');
  await available.fill('6');await expect(shortage).toHaveText('2');
- await page.getByRole('button',{name:/Undo change|ביטול שינוי/}).click();
- await expect(available).toHaveValue('10');await expect(shortage).toHaveText('0');
+ await expect(page.getByRole('button',{name:/Undo change|ביטול שינוי/})).toHaveCount(0);
+ await expect(available).toHaveValue('6');await expect(shortage).toHaveText('2');
  await page.setViewportSize({width:320,height:900});
  if(await page.locator('.shell').getAttribute('dir')!=='rtl')await page.getByRole('button',{name:'Toggle language direction'}).click();
  await expect(page.locator('.shell')).toHaveAttribute('dir','rtl');
