@@ -1,3 +1,4 @@
+import {isLearningRequest,learningContentProblems} from './response-quality';
 import {z} from 'zod';
 import {zodSchema} from 'ai';
 import {ComponentSchema,ItemSchema,WorkspaceSchema} from './schema';
@@ -37,7 +38,7 @@ export function parseAIWorkspace(data:unknown){
 
 /** Reject attractive but unusable AI components before they reach the renderer. */
 export function validateWorkspaceFit(workspace:ReturnType<typeof parseAIWorkspace>,prompt:string){
- const problems:string[]=[];
+ const problems:string[]=isLearningRequest(prompt)?learningContentProblems(workspace.components):[];
  const weeklyIntent=/weekly schedule|schedule for (?:the )?week|plan (?:my|the) week|weekly planner|organize my week|לוז|לו[״׳']?ז|לוח זמנים|תכנון שבועי|לתכנן את השבוע|לארגן את השבוע|לסדר.{0,20}שבוע/iu.test(prompt)&&/week|weekly|לוז|לו[״׳']?ז|לוח זמנים|שבוע/iu.test(prompt);
  const workScheduleIntent=/employee|staff|team shifts|workforce|roster|rota|shift schedule|עובדים|משמרות|סידור עבודה|שיבוץ עובדים/iu.test(prompt);
  const explicitAction=/\b(?:add|build|calculate|compare|create|design|draft|find|make|organize|plan|prepare|research|schedule|track|write|manage|learn|study|book|model|analyze)\b|אני רוצה|אני צריך|אני צריכה|תוסיף|הוסף|ליצור|לכתוב|לתכנן|לארגן|לסדר|לעקוב|לחשב|להשוות|לבנות|להכין|ללמוד|לנהל/iu.test(prompt);

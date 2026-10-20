@@ -1,3 +1,4 @@
+import {RESPONSE_QUALITY_RULES} from './response-quality';
 import {z} from 'zod';
 import {assertPaidAIAllowed} from './ai-policy';
 import {OperationSchema,ScheduleSchema,applyScheduleOperation,type Schedule} from './schedule';
@@ -59,7 +60,7 @@ export async function livePlan(prompt:string,current:Workspace|undefined,session
  const modelConfig=activeAIModel();
  const patch=!!current&&!isNewGoal(prompt,current);
  const context=JSON.stringify({intent:prompt,currentWorkspace:patch?current:null});
- const instructions=system+fitRules+' Follow the response schema exactly. Use null for unused optional fields. Represent item scores as [{criterionId,score}], or null. Build only components that directly perform a required action and include valid data for their renderer. Avoid generic placeholders.';
+ const instructions=system+fitRules+RESPONSE_QUALITY_RULES+' Follow the response schema exactly. Use null for unused optional fields. Represent item scores as [{criterionId,score}], or null. Build only components that directly perform a required action and include valid data for their renderer. Avoid generic placeholders.';
  return retryPoorFit(feedback=>paidRequest(context,instructions+(feedback??''),session,data=>{
   const workspace=validateWorkspaceFit(parseAIWorkspace(data),prompt);
   if(patch&&current){workspace.goal=current.goal;if(current.domain)workspace.domain=current.domain;}else {workspace.goal=prompt;delete workspace.domain;if(isSchedulingGoal(prompt))workspace.domain={kind:'schedule',id:crypto.randomUUID()};}
@@ -79,7 +80,7 @@ export async function liveScheduleIntent(prompt:string,schedule:Schedule,session
 // Interpret and answer in one paid call; ordinary conversation never applies a candidate.
 export async function liveInteraction(prompt:string,current:Workspace|undefined,session:string,history:Array<{role:'user'|'assistant';content:string}>=[]){
  const context=JSON.stringify({message:prompt,visibleWorkspace:current??null,recentConversation:history});
- const instructions=system+fitRules+`
+ const instructions=system+fitRules+RESPONSE_QUALITY_RULES+`
 First distinguish conversation from requests to change the visible workspace. Follow the interaction response schema.
 intent conversation: general chat or a question about the conversation; reply naturally, workspace null.
 intent workspace_question: explanation or question about visibleWorkspace; answer only from supplied data, workspace null. Hypothetical changes are questions, not commands.

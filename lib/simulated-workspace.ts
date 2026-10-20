@@ -131,7 +131,7 @@ export async function runSimulation(prompt:string,current:Workspace|undefined,se
  const fromDB=emulator()||(process.env.NODE_ENV==='production'&&!!process.env.FIREBASE_PROJECT_ID&&!process.env.FIREBASE_PROJECT_ID.startsWith('demo-'));
  const list:PipelineDependencies['list']=async()=>fromDB?listDefinitions({session}):[...seedDefinitions(),...(await localDefinitions()).filter(d=>d.ownerSession===session)];
  const get:PipelineDependencies['get']=async(id,version)=>fromDB?getDefinition(id,version,{session,includeDrafts:true}):(await list({session})).find(d=>d.id===id&&(!version||d.version===version))??null;
- const deps:Partial<PipelineDependencies>={list,get,saveGenerated:fromDB?saveGeneratedDefinition:saveLocal,
+ const deps:Partial<PipelineDependencies>={generalLearningContent:false,list,get,saveGenerated:fromDB?saveGeneratedDefinition:saveLocal,
   interpret:async()=>({intent:'workspace_change',reply:english(prompt)?'Your local tools are ready. Language understanding is simulated.':'הכלים המקומיים מוכנים. הבנת השפה בהדמיה.',contract:draft.contract,budget,cached:false}),
   populate:async(contract,definitions)=>({workspace:populateSimulation(draft.workspace,contract,definitions),budget,cached:false}),semantics:async()=>({}),...overrides};
  const result=await runTaskPipeline(prompt,current,session,history,deps);

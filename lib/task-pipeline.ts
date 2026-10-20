@@ -70,6 +70,7 @@ export function inferredBindings(components:UIComponent[],current?:Workspace):Da
  return preserved;
 }
 export type PipelineDependencies={
+ generalLearningContent?:boolean;
  list:typeof listDefinitions; get:typeof getDefinition; saveGenerated:typeof saveGeneratedDefinition;
  interpret:typeof interpretTask; populate:(contract:TaskContract,definitions:ComponentDefinition[],current:Workspace|undefined,session:string,feedback?:string)=>Promise<{workspace:Workspace;budget:{spent:number;limit:number;warning:boolean};cached:boolean}>; semantics:typeof semanticScores;
 };
@@ -91,7 +92,7 @@ export async function runTaskPipeline(prompt:string,current:Workspace|undefined,
   interpretation={...interpretation,intent:'workspace_change',contract:{...contract,clarification:undefined},reply:/[א-ת]/.test(prompt)?'יוצר סביבת עבודה לעריכה. מידע חסר נשאר כקלט להשלמה.':'Creating an editable workspace. Missing information remains available for you to enter.'};
  }
  if(interpretation.intent!=='workspace_change')return {operation:interpretation.intent==='schedule_change'?'schedule':'reply',intent:interpretation.intent,explanation:interpretation.reply,mode:'live' as const,budget:interpretation.budget};
- const contract=enforceWorkspaceBehavior(TaskContractSchema.parse(interpretation.contract),current?`${current.goal}\n${prompt}`:prompt);
+ const contract=enforceWorkspaceBehavior(TaskContractSchema.parse(interpretation.contract),current?`${current.goal}\n${prompt}`:prompt,{generalLearningContent:deps.generalLearningContent});
  if(contract.clarification)return {operation:'reply',intent:'clarification',explanation:contract.clarification,contract,mode:'live' as const,budget:interpretation.budget};
  const patch=!!current&&!isNewGoal(prompt,current);
  const previous=patch?current:undefined;

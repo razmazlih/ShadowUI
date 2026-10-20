@@ -1,3 +1,4 @@
+import {LEARNING_CONTENT_POLICY,learningContentProblems} from './response-quality';
 import {LEARNING_PLAN_POLICY} from './task-workspace-policy';
 import { ComponentSchema, type UIComponent } from './schema';
 import { evaluateCustomTool } from './custom-tool';
@@ -14,6 +15,7 @@ export function validateTaskInstances(contract:TaskContract, source:TaskAssembly
  const components=Array.isArray(source)?source:source.components,selections=Array.isArray(source)?selected??[]:source.selections;
  if(components.length>16)errors.push('Workspace exceeds the 16 component limit');
  if(new Set(components.map(component=>component.id)).size!==components.length)errors.push('Duplicate component instance IDs');
+ if(contract.constraints.includes(LEARNING_CONTENT_POLICY))errors.push(...learningContentProblems(components));
  const byId=new Map(components.map(component=>[component.id,component]));
  if(contract.constraints.includes(LEARNING_PLAN_POLICY)){
   if(!components.some(c=>c.type==='timeline'&&c.items.length>=2))errors.push('Learning plan requires at least two structured learning milestones; a prose outline cannot replace them');

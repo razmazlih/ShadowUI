@@ -163,8 +163,10 @@ test('learning-plan repair produces usable milestones and practice controls inst
  const notes=component('notes'),timeline=component('timeline'),practice=component('checklist');
  timeline.items=[{id:'http',label:'Understand HTTP requests'},{id:'api',label:'Build a database-backed API'}];
  practice.items=[{id:'health',label:'Implement GET /health',done:false},{id:'crud',label:'Implement CRUD endpoints',done:false}];
+ notes.text='An HTTP request specifies a method and path. Worked example: GET /health returns status 200 and a JSON health response; test both status and body.';
+ const quiz=component('quiz');quiz.items=[{id:'q1',label:'Which method retrieves a health check?',options:['GET','DELETE'],answer:'GET',detail:'GET retrieves a resource without modifying it.'},{id:'q2',label:'Which status indicates success?',options:['200','500'],answer:'200',detail:'200 indicates success; 500 indicates a server failure.'}];
  const contract=demoTaskContract('Backend learning plan',[notes]),h=harness(contract,[notes]);
- h.deps.populate=async()=>{h.calls.populate++;return {workspace:draft(h.calls.populate===1?[notes]:[notes,timeline,practice]),budget,cached:false};};
+ h.deps.populate=async()=>{h.calls.populate++;return {workspace:draft(h.calls.populate===1?[notes]:[notes,timeline,practice,quiz]),budget,cached:false};};
  const result=await runTaskPipeline(contract.objective,undefined,session,[],h.deps);
  assert.equal(result.operation,'create');assert.equal(result.coverage?.complete,true);assert.equal(result.validation?.valid,true);
  assert.equal(result.workspace?.components.find(c=>c.type==='checklist')?.items.length,2);assert.equal(h.calls.populate,2);
