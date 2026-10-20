@@ -1,6 +1,6 @@
 'use client';
 import {getApps,initializeApp} from 'firebase/app';
-import {connectAuthEmulator,getAuth,GoogleAuthProvider,onAuthStateChanged,signInWithPopup,signOut,type User} from 'firebase/auth';
+import {browserLocalPersistence,connectAuthEmulator,createUserWithEmailAndPassword,EmailAuthProvider,getAuth,GoogleAuthProvider,inMemoryPersistence,linkWithCredential,onAuthStateChanged,reload,sendEmailVerification,sendPasswordResetEmail,setPersistence,signInWithEmailAndPassword,signInWithPopup,signOut,type OAuthCredential,type User} from 'firebase/auth';
 const config={apiKey:process.env.NEXT_PUBLIC_FIREBASE_API_KEY,authDomain:process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,projectId:process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,appId:process.env.NEXT_PUBLIC_FIREBASE_APP_ID};
 const emulatorHost=process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
 function localEmulatorURL(){
@@ -19,3 +19,124 @@ function auth(){
 export function observeCatalogUser(callback:(user:User|null)=>void){if(!firebaseClientConfigured){callback(null);return ()=>{};}return onAuthStateChanged(auth(),callback);}
 export async function signInCatalog(){return signInWithPopup(auth(),new GoogleAuthProvider());}
 export async function signOutCatalog(){return signOut(auth());}
+
+const accountObservers=new Set<(user:User|null)=>void>();
+let accountOperations=0;
+let pendingGoogle:{email:string;credential:OAuthCredential}|null=null;
+function publishAccount(){if(!accountOperations)for(const callback of accountObservers)callback(auth().currentUser);}
+async function accountOperation<T>(operation:()=>Promise<T>):Promise<T>{
+ accountOperations++;
+ try{await setPersistence(auth(),browserLocalPersistence);auth().languageCode='he';return await operation();}
+ finally{accountOperations--;publishAccount();}
+}
+export function observeAccountUser(callback:(user:User|null)=>void,onError?:(error:Error)=>void){
+ if(!firebaseClientConfigured){callback(null);return ()=>{};}
+ try{
+  const instance=auth();accountObservers.add(callback);
+  const unsubscribe=onAuthStateChanged(instance,()=>{if(!accountOperations)callback(instance.currentUser);},error=>{onError?.(error);if(!accountOperations)callback(instance.currentUser);});
+  return ()=>{accountObservers.delete(callback);unsubscribe();};
+ }catch(error){accountObservers.delete(callback);onError?.(error instanceof Error?error:new Error('לא ניתן לפתוח את שירות ההתחברות.'));callback(null);return ()=>{};}
+}
+export function accountAuthError(error:unknown,locale:'he'|'en'='he'){
+ const code=(error as {code?:string})?.code;
+ const messages:Record<string,string>=locale==='en'?{
+  'auth/invalid-credential':'The email or password is incorrect. Try signing in with Google or resetting your password.',
+  'auth/email-already-in-use':'An account with this email already exists. Sign in with Google or your existing password. After signing in with Google, you can add a password to the same account.',
+  'auth/account-exists-with-different-credential':'This email already belongs to an account. Sign in with your existing password to link Google as well.',
+  'auth/popup-closed-by-user':'The sign-in window was closed. Please try again.',
+  'auth/popup-blocked':'Your browser blocked the Google sign-in window. Allow pop-ups and try again.',
+  'auth/weak-password':'Choose a password with at least 6 characters.',
+  'auth/invalid-email':'Enter a valid email address.',
+  'auth/too-many-requests':'Too many attempts. Please try again later.',
+  'auth/network-request-failed':'Unable to connect to the sign-in service. Check your connection and try again.',
+  'auth/operation-not-allowed':'This sign-in method is not enabled in the Firebase project.',
+  'auth/unauthorized-domain':'This website domain is not authorized for Firebase sign-in.',
+  'auth/requires-recent-login':'Sign in again before changing your sign-in details.',
+ }:{
+  'auth/invalid-credential':'האימייל או הסיסמה אינם נכונים. אפשר לנסות כניסה עם Google או איפוס סיסמה.',
+  'auth/email-already-in-use':'כבר קיים חשבון עם האימייל הזה. התחברו אליו עם Google או עם הסיסמה הקיימת. לאחר כניסה עם Google תוכלו להוסיף סיסמה לאותו חשבון.',
+  'auth/account-exists-with-different-credential':'האימייל כבר משויך לחשבון. התחברו עם הסיסמה הקיימת כדי לקשר גם את Google.',
+  'auth/popup-closed-by-user':'חלון ההתחברות נסגר. אפשר לנסות שוב.',
+  'auth/popup-blocked':'הדפדפן חסם את חלון Google. אפשרו חלונות קופצים ונסו שוב.',
+  'auth/weak-password':'בחרו סיסמה של לפחות 6 תווים.',
+  'auth/invalid-email':'כתובת האימייל אינה תקינה.',
+  'auth/too-many-requests':'בוצעו יותר מדי ניסיונות. נסו שוב מאוחר יותר.',
+  'auth/network-request-failed':'אין חיבור לשירות ההתחברות. בדקו את החיבור ונסו שוב.',
+  'auth/operation-not-allowed':'שיטת ההתחברות אינה מופעלת בפרויקט Firebase.',
+  'auth/unauthorized-domain':'כתובת האתר אינה מורשית להתחברות ב־Firebase.',
+  'auth/requires-recent-login':'יש להתחבר שוב לפני שינוי פרטי ההתחברות.',
+ };
+ if(code&&messages[code])return messages[code];
+ if(locale==='en'){
+  const localMessages:Record<string,string>={
+   'Firebase Authentication אינו מוגדר כראוי.':'Firebase Authentication is not configured correctly.',
+   'לא ניתן לפתוח את שירות ההתחברות.':'Unable to open the sign-in service.',
+   'יש להתחבר תחילה.':'Please sign in first.',
+   'יש להתחבר עם Google ולאמת את האימייל תחילה.':'Sign in with Google and verify your email first.',
+   'יש לאמת את האימייל לפני קישור Google.':'Verify your email before linking Google.',
+   'בחרו את חשבון Google עם אותו אימייל בדיוק. לא בוצע קישור.':'Choose the Google account with the exact same email address. No account was linked.',
+   'לא ניתן לאמת את חשבון Google. נסו שוב.':'Unable to verify the Google account. Please try again.',
+  };
+  return error instanceof Error&&!code&&localMessages[error.message]||'The action failed. Please try again.';
+ }
+ return error instanceof Error&&!code?error.message:'הפעולה נכשלה. נסו שוב.';
+}
+export function signInAccountGoogle(){return accountOperation(async()=>{
+ try{const result=await signInWithPopup(auth(),new GoogleAuthProvider());pendingGoogle=null;return result;}
+ catch(error){
+  if((error as {code?:string}).code==='auth/account-exists-with-different-credential'){
+   const credential=GoogleAuthProvider.credentialFromError(error as Parameters<typeof GoogleAuthProvider.credentialFromError>[0]);
+   const email=(error as {customData?:{email?:string}}).customData?.email;
+   if(credential&&email)pendingGoogle={credential,email};
+  }
+  throw error;
+ }
+});}
+export function signInAccountEmail(email:string,password:string){return accountOperation(async()=>{
+ const result=await signInWithEmailAndPassword(auth(),email.trim(),password);
+ if(pendingGoogle&&result.user.emailVerified&&result.user.email?.toLowerCase()===pendingGoogle.email.toLowerCase()){
+  await linkWithCredential(result.user,pendingGoogle.credential);pendingGoogle=null;
+ }
+ return result;
+});}
+export function registerAccount(email:string,password:string){return accountOperation(async()=>{
+ const result=await createUserWithEmailAndPassword(auth(),email.trim(),password);
+ await sendEmailVerification(result.user);return result;
+});}
+export function resendAccountVerification(){return accountOperation(async()=>{
+ const user=auth().currentUser;if(!user)throw new Error('יש להתחבר תחילה.');await sendEmailVerification(user);
+});}
+export function refreshAccountVerification(){return accountOperation(async()=>{
+ const user=auth().currentUser;if(!user)return null;
+ await reload(user);await user.getIdToken(true);
+ if(user.emailVerified&&pendingGoogle&&user.email?.toLowerCase()===pendingGoogle.email.toLowerCase()){
+  await linkWithCredential(user,pendingGoogle.credential);pendingGoogle=null;
+ }
+ return user;
+});}
+export function resetAccountPassword(email:string){return accountOperation(()=>sendPasswordResetEmail(auth(),email.trim()));}
+export function addAccountPassword(password:string){return accountOperation(async()=>{
+ const user=auth().currentUser;
+ if(!user?.email||!user.emailVerified||!user.providerData.some(provider=>provider.providerId==='google.com'))throw new Error('יש להתחבר עם Google ולאמת את האימייל תחילה.');
+ return linkWithCredential(user,EmailAuthProvider.credential(user.email,password));
+});}
+export function linkAccountGoogle(){return accountOperation(async()=>{
+ const user=auth().currentUser;
+ if(!user?.emailVerified||!user.email)throw new Error('יש לאמת את האימייל לפני קישור Google.');
+ // A separate, memory-only session proves ownership without replacing the active UID.
+ const app=getApps().find(candidate=>candidate.name==='shadowui-account-link')??initializeApp(config,'shadowui-account-link');
+ const proof=getAuth(app);
+ if(emulatorURL&&!proof.emulatorConfig)connectAuthEmulator(proof,emulatorURL,{disableWarnings:true});
+ await setPersistence(proof,inMemoryPersistence);
+ try{
+  const provider=new GoogleAuthProvider();provider.setCustomParameters({login_hint:user.email,prompt:'select_account'});
+  const result=await signInWithPopup(proof,provider);
+  if(!result.user.emailVerified||result.user.email?.toLowerCase()!==user.email.toLowerCase())throw new Error('בחרו את חשבון Google עם אותו אימייל בדיוק. לא בוצע קישור.');
+  // Firebase can auto-link a trusted Google provider during the proof sign-in.
+  if(result.user.uid===user.uid){await reload(user);await user.getIdToken(true);return;}
+  const credential=GoogleAuthProvider.credentialFromResult(result);
+  if(!credential)throw new Error('לא ניתן לאמת את חשבון Google. נסו שוב.');
+  await linkWithCredential(user,credential);
+ }finally{await signOut(proof);}
+});}
+export function signOutAccount(){return accountOperation(async()=>{await signOut(auth());pendingGoogle=null;});}

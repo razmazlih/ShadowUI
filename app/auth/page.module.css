@@ -1,0 +1,23 @@
+.screen{--accent:#eda77d;--bg:#101113;--panel:#161719;--line:#28292c;--text:#e9e9eb;--muted:#808185;position:relative;isolation:isolate;min-height:100dvh;box-sizing:border-box;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;padding:24px 18px;background:#101113;color:#e9e9eb;overflow-x:clip;font-family:inherit}
+.glow{position:absolute;z-index:-1;top:0;left:calc(50% - 360px);width:720px;height:580px;background:radial-gradient(ellipse,#eda77d14,transparent 68%);pointer-events:none}
+.brand{display:flex;gap:10px;align-items:center;color:inherit;text-decoration:none;direction:ltr;font-size:21px;flex-shrink:0}
+.brand>span{display:grid;place-items:center;width:30px;height:30px;background:var(--text);color:var(--bg);font-weight:800;border-radius:9px}
+.brand strong span{color:#808185}
+.card{position:relative;width:100%;max-width:410px;box-sizing:border-box;padding:25px;background:linear-gradient(155deg,#1b1b1e,#151618 62%);border:1px solid #ffffff12;border-radius:21px;box-shadow:0 22px 90px #0003;text-align:center;flex-shrink:0}
+.card::before{content:'';position:absolute;top:-1px;left:20%;right:20%;height:1px;background:linear-gradient(90deg,transparent,#eda77d68,transparent);pointer-events:none}
+.continue{display:block;font-size:12px;color:#b6a496;text-decoration:none;padding:15px 0 0;line-height:1.5}
+.continue:hover{color:var(--accent);text-decoration:underline;text-underline-offset:4px}
+.note{font-size:10px;line-height:1.65;color:#73747c;margin:9px 0 0}
+.screen a:focus-visible{outline:2px solid #eda77d;outline-offset:4px}
+@media(max-width:480px){.screen{gap:20px;padding:20px 14px}.card{padding:20px 18px;border-radius:19px}}
+@media(max-height:760px){.screen{gap:15px;padding-block:15px}.card{padding-block:18px}.continue{padding-top:12px}.note{margin-top:6px}}
+.continue{transition:color .2s ease;text-underline-offset:4px}.continue span{display:inline-block;transition:transform .25s cubic-bezier(.22,1,.36,1)}.continue:hover span{transform:translateX(-4px)}
+@media(prefers-reduced-motion:reduce){.continue,.continue span{transition:none}.continue:hover span{transform:none}}
+.glow{animation:auth-ambient 14s ease-in-out infinite alternate;transform-origin:50% 30%}.card{animation:auth-card-arrive .7s cubic-bezier(.22,1,.36,1) both}.card::before{animation:auth-edge-light 1.4s ease-out both}.brand>span{animation:auth-brand-arrive .7s cubic-bezier(.22,1,.36,1) both}
+@keyframes auth-ambient{from{opacity:.6;transform:translate3d(-28px,-12px,0) scale(.94)}to{opacity:1;transform:translate3d(28px,18px,0) scale(1.08)}}
+@keyframes auth-card-arrive{from{opacity:0;transform:perspective(1000px) translateY(18px) rotateX(2deg) scale(.985)}to{opacity:1;transform:perspective(1000px) translateY(0) rotateX(0) scale(1)}}
+@keyframes auth-brand-arrive{from{opacity:0;transform:translateY(-5px) rotate(-8deg) scale(.9)}to{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
+@keyframes auth-edge-light{0%{opacity:0;transform:scaleX(.3)}55%{opacity:1;transform:scaleX(1)}100%{opacity:.7;transform:scaleX(1)}}
+@media(prefers-reduced-motion:reduce){.glow,.card,.card::before,.brand>span{animation:none}}
+
+.language{display:block;margin:0 0 16px auto;padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--text);font:inherit;font-size:12px;cursor:pointer}.language:hover{border-color:var(--accent)}.language:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
