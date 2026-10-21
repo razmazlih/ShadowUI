@@ -1,4 +1,5 @@
 'use client';
+import InterfaceSymbol from './InterfaceSymbol';
 import {useEffect,useState,useRef} from 'react';
 import {usePathname} from 'next/navigation';
 
@@ -21,7 +22,7 @@ export default function BootScreen(){
  },[leaving]);
  if(finished||!enabled.current)return null;
  return <div className={`boot-screen${leaving?' is-leaving':''}`} aria-hidden={leaving||undefined}>
-  <div className="boot-emblem" aria-hidden="true"><i/><i/><i/><span>✳</span></div>
+  <div className="boot-emblem" aria-hidden="true"><i/><i/><i/><span><InterfaceSymbol/></span></div>
   <div className="boot-wordmark">Shadow<span>UI</span></div>
   <div className="boot-pulse" role="status" aria-label="Loading your workspace"><i/><i/><i/></div>
  </div>;
