@@ -12,7 +12,7 @@ test('catalog browses persisted definitions, filters, and previews real editable
  await page.getByRole('button',{name:'בדיקה ותצוגה מקדימה'}).click();
  const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
  await expect(dialog.getByRole('table')).toBeVisible();
- await dialog.getByRole('spinbutton',{name:'Option A score for Fit'}).fill('75');
+ await dialog.getByRole('spinbutton',{name:'Option A ציון עבור Fit'}).fill('75');
  await expect(dialog.getByText('75.0/100')).toBeVisible();
  await page.getByRole('tab',{name:'היסטוריית גרסאות'}).click();
  await expect(dialog.getByText('גרסה 1 · פעיל',{exact:true})).toBeVisible();
