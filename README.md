@@ -10,6 +10,8 @@ Private validated tools are reusable. With the demo Firebase emulators running, 
 
 See [current verification and limits](docs/adaptive-workspace-verification.md).
 
+GitHub Actions runs unit, production build, TypeScript, Chromium browser and Firebase emulator checks on every push and pull request. See the [Hebrew CI guide](docs/ci.md) for results, local commands and required merge checks.
+
 ## Task-aware catalog
 
 The task pipeline now builds a validated task contract, selects capability-compatible components from Firestore, composes typed local data bindings, and can generate private validated calculators when no catalog formula fits. Visit `/catalog` for browsing, interactive previews and authenticated version management. Instance edits stay in this browser; catalog definitions persist in Firebase. See [configuration, behavior and limitations](docs/component-catalog.md).

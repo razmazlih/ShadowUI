@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {User} from 'firebase/auth';
 import {migrateGuestToAccount,parseWorkspaceSnapshot,readAccountWorkspaces,readAccountSyncBase,writeAccountWorkspaces,type WorkspaceSnapshot} from '@/lib/account-workspaces';
-import {setDeviceDataOwner,snapshotDeviceData,restoreDeviceData} from '@/lib/account-device-data';
+import {setDeviceDataOwner,snapshotDeviceData,restoreDeviceData,guestDeviceData} from '@/lib/account-device-data';
 import {reconcileSnapshots} from '@/lib/workspace-sync';
 
 export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:WorkspaceSnapshot)=>void,busy:boolean){
@@ -20,6 +20,7 @@ export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:Work
    if(uid){const guest=readAccountWorkspaces(localStorage,null);writeAccountWorkspaces(localStorage,null,{...guest,deviceData:{...guest.deviceData,...snapshotDeviceData(localStorage,guest.workspaces,null)}});}
    const next=uid?migrateGuestToAccount(localStorage,uid):readAccountWorkspaces(localStorage,null);
    setDeviceDataOwner(uid);
+   if(uid===null)next.deviceData=guestDeviceData(localStorage,next);
    restoreDeviceData(localStorage,next.deviceData);
    next.deviceData={...next.deviceData,...snapshotDeviceData(localStorage,next.workspaces)};
    let previous=parseWorkspaceSnapshot(null);

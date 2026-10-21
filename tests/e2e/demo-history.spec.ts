@@ -1,47 +1,55 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
+import {planDemo} from '../../lib/planner';
+import {activeWorkspace,guestWorkspaces} from './helpers/storage';
 
-test('all demo transcripts open without network actions or touching saved work',async({page})=>{
+async function localPlanning(page:Page){
  const requests:string[]=[];
- page.on('request',r=>{if(r.url().includes('/api/'))requests.push(r.url())});
- await page.addInitScript(()=>localStorage.setItem('shadowui.v1',JSON.stringify({workspaces:[{id:'existing-user-work',title:'Existing work',description:'Keep this',goal:'Keep my notes',components:[{id:'notes',type:'notes',title:'Notes',reason:'User content',span:'wide',items:[],text:'Do not change'}]}],active:'existing-user-work'})));
- await page.goto('/');
- await expect(page.getByRole('heading',{name:'Existing work'})).toBeVisible();
- const before=await page.evaluate(()=>localStorage.getItem('shadowui.v1'));
- const history=page.getByLabel('היסטוריית שיחות דמו');
- await expect(history.getByRole('button')).toHaveCount(10);
- for(let i=0;i<10;i++){
-  await history.getByRole('button').nth(i).click();
-  await expect(page.getByRole('heading',{name:'התוצר שלכם'})).toBeVisible();
-  await expect(page.locator('.demo-transcript')).not.toHaveAttribute('open','');
-  expect(await page.locator('.r-card:visible').count()).toBeGreaterThan(0);
-  await expect(page.getByRole('navigation',{name:/Choose a tool|בחירת כלי/})).toHaveCount(0);
-  expect(await page.locator('.demo-transcript').evaluate(el=>!!el.previousElementSibling?.querySelector('.r-card'))).toBe(true);
-  await page.locator('.demo-transcript > summary').click();
-  await expect(page.locator('.demo-message').first()).toContainText('אתם');
-  await expect(page.locator('.demo-message').last()).toContainText('ShadowUI');
-  await expect(page.locator('.demo-end')).toBeVisible();
+ page.on('request',request=>{if(/api\.openai\.com|\/v1\/(responses|embeddings|chat\/completions)/.test(request.url()))requests.push(request.url());});
+ let compositions=0;
+ await page.route('**/api/plan',route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{configured:false,storageReady:true,simulation:true,liveEnabled:false}});
+  const body=route.request().postDataJSON();expect(body.mode).toBe('demo');compositions++;
+  return route.fulfill({json:{...planDemo(body.prompt,body.current??undefined),mode:'demo',simulation:true}});
+ });
+ return {requests,count:()=>compositions};
+}
+
+test('all starting points create distinct history entries and preserve existing saved work',async({page})=>{
+ const planning=await localPlanning(page);
+ await page.addInitScript(()=>{
+  if(localStorage.getItem('shadowui.device.v1.guest'))return;
+  localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'history-test',importedGuests:[],snapshot:{workspaces:[{id:'existing-user-work',title:'Existing work',description:'Keep this',goal:'Keep my notes',components:[{id:'notes',type:'notes',title:'Notes',reason:'User content',span:'wide',items:[],text:'Do not change'}]}],active:'existing-user-work'}}));
+ });
+ await page.goto('/');await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Do not change');
+ const original=(await guestWorkspaces(page))[0];const created:string[]=[];
+ for(const label of ['Learn something deeply','Organize a working week','Go somewhere new','Make a better decision']){
+  await page.getByRole('button',{name:/New workspace/}).click();
+  await expect(page.locator('.examples > button')).toHaveCount(4);
+  await page.getByRole('button',{name:new RegExp(label)}).click();
+  await expect(page.locator('.r-card').first()).toBeVisible();
+  const workspace=await activeWorkspace(page);expect(created).not.toContain(workspace.id);created.push(workspace.id);
+  expect((await guestWorkspaces(page)).find(item=>item.id===original.id)).toEqual(original);
  }
- expect(requests).toEqual([]);
- expect(await page.evaluate(()=>localStorage.getItem('shadowui.v1'))).toBe(before);
- await page.screenshot({path:'work/demo-desktop.png'});
- await page.getByLabel('AI planning mode').selectOption('live');
- await expect(history).toHaveCount(0);
- await expect(page.locator('.demo-conversation')).toHaveCount(0);
- await page.getByLabel('AI planning mode').selectOption('demo');
- await expect(history.getByRole('button')).toHaveCount(10);
+ expect(planning.count()).toBe(4);
+ await page.locator('.workspace-history-open').filter({hasText:'Existing work'}).click();
+ await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Do not change');
+ await page.reload();await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Do not change');
+ await expect(page.locator('.workspace-history-open')).toHaveCount(5);
+ expect((await guestWorkspaces(page)).find(item=>item.id===original.id)).toEqual(original);
+ expect(planning.count()).toBe(4);expect(planning.requests).toEqual([]);
 });
 
-test('mobile history closes on selection and transcript fits viewport',async({page})=>{
- await page.setViewportSize({width:390,height:844});
- await page.goto('/');
- await page.getByLabel('Toggle navigation').click();
- await page.getByLabel('היסטוריית שיחות דמו').getByRole('button').last().click();
+test('mobile recent history closes on selection and restores editable work within the viewport',async({page})=>{
+ const planning=await localPlanning(page);await page.setViewportSize({width:390,height:844});await page.goto('/');
+ await page.getByRole('button',{name:/Learn something deeply/}).click();
+ await page.getByRole('checkbox').first().check();const learning=await activeWorkspace(page);
+ await page.getByLabel('Toggle navigation').click();await page.getByRole('button',{name:/New workspace/}).click();
  await expect(page.locator('.sidebar')).not.toBeVisible();
- await expect(page.getByRole('heading',{name:'מפגישה לחבילת עבודה'})).toBeVisible();
- expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
- await expect(page.locator('.demo-message')).toHaveCount(6);
- await expect(page.locator('.demo-message').first()).not.toBeVisible();
- await page.locator('.demo-transcript > summary').click();
- await expect(page.locator('.demo-message').first()).toBeVisible();
- await page.screenshot({path:'work/demo-mobile.png'});
+ await page.getByRole('button',{name:/Go somewhere new/}).click();await expect(page.getByRole('heading',{name:'Budget ceiling'})).toBeVisible();
+ await page.getByLabel('Toggle navigation').click();
+ await page.locator('.workspace-history-open').filter({hasText:learning.title}).click();
+ await expect(page.locator('.sidebar')).not.toBeVisible();await expect(page.getByRole('checkbox').first()).toBeChecked();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.reload();await expect(page.getByRole('checkbox').first()).toBeChecked();
+ expect(planning.count()).toBe(2);expect(planning.requests).toEqual([]);
 });

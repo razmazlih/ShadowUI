@@ -1,3 +1,4 @@
+import {guestDeviceData} from '../lib/account-device-data';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {accountWorkspaceKey,readAccountSyncBase,migrateGuestToAccount,parseWorkspaceSnapshot,readAccountWorkspaces,writeAccountWorkspaces,type WorkspaceStorage} from '../lib/account-workspaces';
@@ -61,4 +62,21 @@ test('snapshot and its cloud baseline share one atomic envelope and survive gues
  const before=local.getItem(accountWorkspaceKey('alice'));assert.throws(()=>writeAccountWorkspaces({...local,setItem:()=>{throw new Error('quota')}},'alice',snapshot('next'),snapshot('next-base')),/quota/);assert.equal(local.getItem(accountWorkspaceKey('alice')),before);
  // A stale tab persists its own snapshot together with the baseline it edited.
  writeAccountWorkspaces(local,'alice',edited,baseline);assert.equal(readAccountSyncBase(local,'alice').active,'base');assert.equal(readAccountSyncBase(local,'new-user').workspaces.length,0);
+});
+
+test('guest reload retains newer control edits while recovering missing envelope data without reading account keys',()=>{
+ const local=storage(),guest=snapshot('guest'),layout='shadowui.layout.v1:guest',density=layout+':density',schedule='shadowui.browser-schedule.v1.00000000-0000-4000-8000-000000000001';
+ guest.workspaces[0].domain={kind:'schedule',id:'00000000-0000-4000-8000-000000000001'};
+ guest.deviceData={[layout]:JSON.stringify({mode:'auto',order:['notes','timer']}),[density]:'comfortable',[schedule]:JSON.stringify({revision:0})};
+ writeAccountWorkspaces(local,null,guest);
+ // Controls save directly without updating the older workspace envelope.
+ const edited=JSON.stringify({mode:'fixed',order:['timer','notes']});
+ local.setItem(layout,edited);local.setItem(schedule,JSON.stringify({revision:1}));
+ local.setItem('shadowui.device-data.alice.'+density,'compact');
+ local.setItem('shadowui.layout.v1:unrelated',JSON.stringify({mode:'fixed'}));
+ const reloaded=readAccountWorkspaces(local,null),restored=guestDeviceData(local,reloaded);
+ assert.equal(restored[layout],edited);assert.equal(restored[schedule],JSON.stringify({revision:1}));
+ assert.equal(restored[density],'comfortable');assert.equal(restored['shadowui.layout.v1:unrelated'],undefined);
+ assert.equal(reloaded.deviceData![layout],guest.deviceData[layout]);
+ assert.equal(local.getItem('shadowui.device-data.alice.'+density),'compact');
 });

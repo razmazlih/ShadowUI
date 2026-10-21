@@ -1,10 +1,10 @@
 import {test,expect,type Page} from '@playwright/test';
 
 async function openWorkspace(page:Page){
- await page.addInitScript(()=>localStorage.setItem('shadowui.v1',JSON.stringify({active:'floating-chat',workspaces:[{id:'floating-chat',title:'Assistant workspace',goal:'Keep my notes',description:'A workspace with a conversation',components:[{id:'notes',type:'notes',title:'Working notes',reason:'Keep working while chatting',items:[],text:'Original notes'}]}],conversations:{'floating-chat':[{role:'user',content:'Keep this earlier request'},{role:'assistant',content:'Your earlier answer is still here.'}]}})));
- await page.route('**/api/plan',route=>route.fulfill({json:route.request().method()==='GET'?{configured:true,storageReady:true,spent:0,limit:1}:{operation:'reply',intent:'workspace_question',explanation:'Your new answer appears in this assistant.',mode:'live'}}));
+ await page.addInitScript(()=>localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'floating-chat',workspaces:[{id:'floating-chat',title:'Assistant workspace',goal:'Keep my notes',description:'A workspace with a conversation',components:[{id:'notes',type:'notes',title:'Working notes',reason:'Keep working while chatting',items:[],text:'Original notes'}]}],conversations:{'floating-chat':[{role:'user',content:'Keep this earlier request'},{role:'assistant',content:'Your earlier answer is still here.'}]}}})));
+ await page.route('**/api/plan',route=>route.fulfill({json:route.request().method()==='GET'?{configured:true,storageReady:true,liveEnabled:true,simulation:false,spent:0,limit:1}:{operation:'reply',intent:'workspace_question',explanation:'Your new answer appears in this assistant.',mode:'live'}}));
  await page.goto('/');
- await expect(page.getByRole('heading',{name:'Assistant workspace'})).toBeVisible();
+ await expect(page.locator('.breadcrumb strong').filter({hasText:'Assistant workspace'})).toBeVisible();
  const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});
  if(await launcher.isVisible())await launcher.click();
  return page.getByRole('region',{name:/ShadowUI/});
@@ -33,7 +33,7 @@ test('floating assistant keeps conversation and draft through expand, compact, a
  await expect(assistant.getByRole('log')).toContainText('Your new answer appears in this assistant.');
  await expect(assistant.getByRole('log')).toContainText('Keep this earlier request');
  await expect(input).toHaveValue('');
- await page.screenshot({path:'output/playwright/floating-assistant-desktop.png'});
+ await page.screenshot({path:test.info().outputPath('floating-assistant-desktop.png')});
 });
 
 test('assistant fits 320px in compact, expanded, minimized and RTL states',async({page})=>{
@@ -45,7 +45,7 @@ test('assistant fits 320px in compact, expanded, minimized and RTL states',async
  };
  await fits();
  await page.getByRole('button',{name:'Expand assistant',exact:true}).click();await fits();
- await page.screenshot({path:'output/playwright/floating-assistant-mobile-expanded.png'});
+ await page.screenshot({path:test.info().outputPath('floating-assistant-mobile-expanded.png')});
  await page.getByRole('button',{name:'Compact assistant',exact:true}).click();
  await page.getByRole('button',{name:'Toggle language direction'}).click();await page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/}).click();await fits();
  await page.getByRole('button',{name:/^(Minimize assistant|מזעור העוזר)$/}).click();

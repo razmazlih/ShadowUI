@@ -1,23 +1,23 @@
 import {test,expect,type Page} from '@playwright/test';
 import {planDemo} from '../../lib/planner';
 
-async function openAssistant(page:Page){const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});if(await launcher.isVisible())await launcher.click();}
+async function openAssistant(page:Page){const input=page.getByLabel('What do you want to accomplish?');if(!await input.isVisible()){const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});await expect(launcher).toBeVisible();await launcher.click();}await expect(input).toBeVisible();}
 async function fillPrompt(page:Page,text:string){await openAssistant(page);await page.getByLabel('What do you want to accomplish?').fill(text);}
 
 test('missing API key is explicit and cross-origin paid requests are rejected',async({page})=>{
  await page.goto('/');const status=await page.request.get('/api/plan');expect(status.headers()['cache-control']).toBe('no-store');
  const state=await status.json();
  const cross=await page.request.post('/api/plan',{headers:{origin:'https://untrusted.example'},data:{mode:'live',prompt:'test'}});expect(cross.status()).toBe(403);
- if(state.liveEnabled&&!state.configured){await expect(page.getByRole('status').filter({hasText:'אינו זמין'})).toBeVisible();await page.getByLabel('What do you want to accomplish?').fill('Help me study');await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();}
+ if(state.liveEnabled&&!state.configured){await expect(page.getByRole('status').filter({hasText:/אינו זמין|AI is unavailable/})).toBeVisible();await page.getByLabel('What do you want to accomplish?').fill('Help me study');await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();}
 });
 
 for(const [name,prompt] of [['learning','Help me study biology for an exam'],['travel','Plan a five-day trip to Japan with a budget of 1200'],['comparison','Compare three business opportunities'],['general','Organize a neighborhood seed exchange']]){
- test(`live ${name} composition renders validated output, preserves context, and saves provenance`,async({page})=>{
+ test(`live ${name} composition renders validated output, preserves context, and restores the workspace`,async({page})=>{
   let posts=0;let previous:unknown;const first=planDemo(prompt).workspace;
   await page.route('**/api/plan',async route=>{if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true,liveEnabled:true,simulation:false,spent:0,limit:1}});posts++;const body=route.request().postDataJSON();expect(body.mode).toBe('live');previous=body.current;await route.fulfill({json:{workspace:first,mode:'live',operation:posts===1?'create':'patch',explanation:'Mocked provider for UI test',budget:{spent:.002,limit:1,warning:false}}});});
-  await page.goto('/');await page.getByLabel('What do you want to accomplish?').fill(prompt);await page.getByRole('button',{name:'Build workspace'}).click();await expect(page.locator('.workspace-notice').filter({hasText:'AI composition'})).toBeVisible();
-  await fillPrompt(page,'Make the plan shorter');await page.getByRole('button',{name:'Build workspace'}).click();await expect.poll(()=>posts).toBe(2);expect(previous).toMatchObject({id:first.id});await expect(page.getByLabel('What do you want to accomplish?')).toHaveValue('');
-  await page.reload();await expect(page.locator('.workspace-notice').filter({hasText:'AI composition'})).toBeVisible();
+  await page.goto('/');await page.getByLabel('What do you want to accomplish?').fill(prompt);await page.getByRole('button',{name:'Build workspace'}).click();await expect(page.locator('.workspace-notice').filter({hasText:'Live AI'})).toBeVisible();
+  await expect(page.locator('.workspace .r-card').first()).toBeVisible();await fillPrompt(page,'Make the plan shorter');await page.getByRole('button',{name:'Build workspace'}).click();await expect.poll(()=>posts).toBe(2);expect(previous).toMatchObject({id:first.id});await expect(page.getByLabel('What do you want to accomplish?')).toHaveValue('');
+  await page.reload();await expect(page.locator('.workspace-notice').filter({hasText:'Live AI'})).toBeVisible();
  });
 }
 test('natural-language schedule AI proposes a real local preview before applying',async({page})=>{
@@ -43,13 +43,13 @@ test('refresh restores each conversation and sends its previous turns with the v
  await expect(page.getByText('Local demo',{exact:true})).toHaveCount(0);
  const input=page.getByLabel('What do you want to accomplish?');
  await input.fill('Help me study biology');await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.locator('.workspace-title h1')).toBeVisible();
+ await expect(page.locator('.workspace .r-card').first()).toBeVisible();
  await page.reload();
- await expect(page.locator('.workspace-title h1')).toBeVisible();await openAssistant(page);await expect(page.getByRole('log')).toContainText('Help me study biology');
+ await expect(page.locator('.workspace .r-card').first()).toBeVisible();await openAssistant(page);await expect(page.getByRole('log')).toContainText('Help me study biology');
  await input.fill('מה מוצג על המסך?');await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(page.locator('#request-status')).toContainText('This screen shows your biology plan.');
  await page.reload();
- await expect(page.locator('.workspace-title h1')).toBeVisible();await openAssistant(page);await expect(page.getByRole('log')).toContainText('מה מוצג על המסך?');
+ await expect(page.locator('.workspace .r-card').first()).toBeVisible();await openAssistant(page);await expect(page.getByRole('log')).toContainText('מה מוצג על המסך?');
  await input.fill('Continue our conversation');await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(page.locator('#request-status')).toContainText('This screen shows your biology plan.');
  expect(posts).toBe(3);
@@ -74,11 +74,11 @@ test('conversation without a workspace also survives refresh',async({page})=>{
 for(const status of [{configured:false,storageReady:true,liveEnabled:true,simulation:false},{configured:true,storageReady:false,liveEnabled:true,simulation:false}]){
  test(`enabled AI stays blocked without ${status.configured?'storage':'credentials'} and never silently simulates`,async({page})=>{
  let posts=0;await page.route('**/api/plan',route=>{if(route.request().method()==='GET')return route.fulfill({json:status});posts++;return route.abort();});
- await page.goto('/');await expect(page.getByRole('status').filter({hasText:'אינו זמין'})).toBeVisible();
+ await page.goto('/');await expect(page.getByRole('status').filter({hasText:/אינו זמין|AI is unavailable/})).toBeVisible();
  await page.getByLabel('What do you want to accomplish?').fill('Build my workspace');
  await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();
  await page.getByLabel('What do you want to accomplish?').press('Enter');
- await expect(page.locator('.error[role=alert]')).toContainText('אינו זמין');expect(posts).toBe(0);
+ await expect(page.locator('.error[role=alert]')).toContainText(/אינו זמין|AI is unavailable/);expect(posts).toBe(0);
  });
 }
 
@@ -86,5 +86,5 @@ test('AI capability bootstrap completes before any composition request',async({p
  let release:()=>void=()=>{};const gate=new Promise<void>(resolve=>{release=resolve;});let posts=0;
  await page.route('**/api/plan',async route=>{if(route.request().method()==='GET'){await gate;return route.fulfill({json:{configured:true,storageReady:true,simulation:false,liveEnabled:true}});}posts++;expect(route.request().postDataJSON().mode).toBe('live');return route.fulfill({json:{...planDemo('Help me study biology'),mode:'live'}});});
  await page.goto('/');await page.getByLabel('What do you want to accomplish?').fill('Help me study biology');await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();
- await page.getByLabel('What do you want to accomplish?').press('Enter');expect(posts).toBe(0);release();await expect(page.locator('.workspace-title h1')).toBeVisible();expect(posts).toBe(1);
+ await page.getByLabel('What do you want to accomplish?').press('Enter');expect(posts).toBe(0);release();await expect(page.locator('.workspace .r-card').first()).toBeVisible();expect(posts).toBe(1);
 });

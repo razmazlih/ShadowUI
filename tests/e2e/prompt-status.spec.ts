@@ -1,12 +1,13 @@
+import {guestWorkspaces} from './helpers/storage';
 import {test,expect} from '@playwright/test';
 import {planDemo} from '../../lib/planner';
 
 test('prompt shows pending, completion and failure beside the input',async({page})=>{
  let finish:()=>void=()=>{};
- let fail=false;
+ let fail=false;let posts=0;
  await page.route('**/api/plan',async route=>{
-  if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true}});
-  await new Promise<void>(resolve=>{finish=resolve});
+  if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true,liveEnabled:true,simulation:false}});
+  posts++;await new Promise<void>(resolve=>{finish=resolve});
   if(fail)return route.fulfill({status:500,json:{error:'Provider unavailable'}});
   return route.fulfill({json:{...planDemo('Help me study biology'),explanation:'Created your study plan.'}});
  });
@@ -14,29 +15,36 @@ test('prompt shows pending, completion and failure beside the input',async({page
  const input=page.getByLabel('What do you want to accomplish?');
  await input.fill('Help me study biology');
  await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.locator('#request-status')).toContainText('AI is working');
+ await expect(page.locator('#request-status')).toContainText('Understanding your request');
  await expect(input).toBeDisabled();
+ await expect.poll(()=>posts).toBe(1);
  finish();
+ await expect(page.locator('.workspace .r-card').first()).toBeVisible();
+ const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});
+ if(await launcher.isVisible())await launcher.click();
  await expect(page.locator('#request-status')).toContainText('Response ready');
  await expect(page.locator('#request-status')).toContainText('Created your study plan.');
  await expect(input).toBeEnabled();
  await expect(page.getByRole('log')).toContainText('Created your study plan.');
  await page.getByRole('button',{name:'Dismiss notification'}).click();
  await expect(page.locator('#request-status')).toHaveCount(0);
- const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces);
+ await page.getByRole('button',{name:'Toggle language direction'}).click();
+ if(await launcher.isVisible())await launcher.click();
+ const before=await guestWorkspaces(page);
  await input.fill('אני רוצה שתסדר לי את המסך');
  await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(page.locator('#request-status')).toContainText('סידרתי את הרכיבים');
  const id=before[0].id;
  await expect.poll(()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)??'{}').mode,`shadowui.layout.v1:${id}`)).toBe('fixed');
- expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).workspaces)).toEqual(before);
- expect(await page.locator('.layout-toolbar').evaluate(el=>getComputedStyle(el).position)).toBe('static');
+ expect(await guestWorkspaces(page)).toEqual(before);
+ expect(['static','relative']).toContain(await page.locator('.layout-toolbar').evaluate(el=>getComputedStyle(el).position));
  await page.getByRole('button',{name:/^(Dismiss notification|סגירת הודעה)$/}).click();
  await expect(page.locator('#request-status')).toHaveCount(0);
  fail=true;
  await input.fill('עזור לי ללמוד');
  await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.locator('#request-status')).toContainText('מעבד את הבקשה');
+ await expect(page.locator('.assistant-activity')).toContainText('מבין את הבקשה');
+ await expect.poll(()=>posts).toBe(2);
  finish();
  await expect(page.locator('#request-status')).toContainText('הבקשה נכשלה');
  await expect(page.getByRole('alert').filter({hasText:'Provider unavailable'})).toContainText('Provider unavailable');

@@ -1,3 +1,4 @@
+import {activeWorkspaceId} from './helpers/storage';
 import {test,expect,type Page} from '@playwright/test';
 
 const tool=(page:Page,title:string)=>page.locator('.r-card').filter({has:page.getByRole('heading',{name:title,exact:true})});
@@ -26,6 +27,7 @@ function paidTraffic(page:Page){
 test('real simulation inventory computes per-item shortage, restores edits, and preserves changes at 320px RTL',async({page})=>{
  const paid=paidTraffic(page);
  await compose(page,'ניהול מלאי ציוד למתנדבים');
+ await page.getByRole('button',{name:'Toggle language direction'}).click();
  const stock=tool(page,'ציוד וביקוש');
  await stock.getByRole('textbox',{name:'פריט חדש',exact:true}).fill('מסכות');
  await stock.getByRole('button',{name:'הוספה',exact:true}).click();
@@ -66,20 +68,21 @@ test('real simulation expense edits update the table total, linked chart and rem
  await expect(expenses.locator('tfoot')).toContainText('325');await expect(chart).toHaveValue('325');
  await expect(remaining.locator('.custom-tool-result output strong')).toHaveText('675');
  await page.reload();await expect(amount).toHaveValue('325');await expect(remaining.locator('.custom-tool-result output strong')).toHaveText('675');
- const identity=await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).active);
+ const identity=await activeWorkspaceId(page);
  await page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/}).click();
  await page.getByLabel('What do you want to accomplish?').fill('עדכן תקציב ל-1200');
  const followup=page.waitForResponse(response=>response.url().endsWith('/api/plan')&&response.request().method()==='POST');
  await page.getByRole('button',{name:'Build workspace'}).click();expect((await followup).status()).toBe(200);
  await expect(remaining.locator('.custom-tool-result output strong')).toHaveText('875');
  await expect(amount).toHaveValue('325');await expect(chart).toHaveValue('325');
- expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('shadowui.v1')!).active)).toBe(identity);
+ expect(await activeWorkspaceId(page)).toBe(identity);
  expect(paid).toEqual([]);
 });
 
 test('real simulation calculator recomputes valid input and reports an empty numeric input',async({page})=>{
  const paid=paidTraffic(page);
  await compose(page,'מחשבון שטח מלבן רוחב 4 גובה 3');
+ await page.getByRole('button',{name:'Toggle language direction'}).click();
  const calculator=tool(page,'שטח מלבן');
  const width=calculator.getByRole('spinbutton',{name:'רוחב — להזנה',exact:true});
  await expect(calculator.locator('.custom-tool-result output strong')).toHaveText('12');
@@ -115,6 +118,7 @@ test('source edits regenerate study cards and clear obsolete quiz grading withou
  await expect(cards.getByRole('button',{name:'ATP: show question',exact:true})).toContainText('revised source');
  await expect(firstQuestion.getByRole('status')).toHaveText('Correct. Well done!');
  await page.setViewportSize({width:320,height:1000});
+ await page.getByRole('button',{name:'Toggle language direction'}).click();
  await expect(page.locator('.shell')).toHaveAttribute('dir','rtl');
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await cards.scrollIntoViewIfNeeded();

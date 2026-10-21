@@ -1,3 +1,4 @@
+import {activeWorkspace,activeWorkspaceId} from './helpers/storage';
 import {planDemo} from '../../lib/planner';
 import {test,expect,type Page} from '@playwright/test';
 
@@ -11,7 +12,7 @@ test.beforeEach(async({page})=>{
 const card=(page:Page,title:string)=>page.locator('.r-card').filter({has:page.getByRole('heading',{name:title,exact:true})});
 async function action(page:Page,title:string,name:string){const target=card(page,title);if(!await target.locator('.card-layout-options').evaluate(el=>el.hasAttribute('open')))await target.locator('.card-layout-options > summary').click();const labels:Record<string,string>={'Move later':'הזזה קדימה','Move earlier':'הזזה אחורה','Narrower':'הצרה','Wider':'הרחבה','Taller':'הגדלת גובה'};await target.getByRole('button',{name:new RegExp(`^(${name}|${labels[name]??name})$`)}).click();}
 async function setMode(page:Page,value:string){const settings=page.locator('.layout-settings');if(!await settings.evaluate(el=>el.hasAttribute('open')))await settings.locator('summary').click();await settings.getByRole('button',{name:value==='auto'?/^(Automatic|אוטומטי)$/:/^(Two columns|שתי עמודות)$/}).click();}
-async function saved(page:Page){return page.evaluate(()=>{const state=JSON.parse(localStorage.getItem('shadowui.v1')!);try{return JSON.parse(localStorage.getItem(`shadowui.layout.v1:${state.active}`)!)}catch{return null}});}
+async function saved(page:Page){const id=await activeWorkspaceId(page);return page.evaluate(workspaceId=>{try{return JSON.parse(localStorage.getItem(`shadowui.layout.v1:${workspaceId}`)!)}catch{return null}},id);}
 async function geometry(page:Page){await expect.poll(async()=>{if(!await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))return false;const boxes=await page.locator('.r-card:visible').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){const a=boxes[i],b=boxes[j];if(!(a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1))return false;}return true;}).toBe(true);}
 
 test('all learning tools are open and edits survive return and reload without layout changes',async({page})=>{
@@ -21,7 +22,7 @@ test('all learning tools are open and edits survive return and reload without la
  const before=await page.locator('.r-card').evaluateAll(els=>els.map(el=>el.querySelector('h3')?.textContent));
  await page.getByRole('checkbox').first().check();
  expect(await page.locator('.r-card').evaluateAll(els=>els.map(el=>el.querySelector('h3')?.textContent))).toEqual(before);
- const title=await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('shadowui.v1')!);return s.workspaces.find((w:{id:string})=>w.id===s.active).title;});
+ const title=await activeWorkspace(page).then(workspace=>workspace.title);
  await page.reload();await expect(page.getByRole('checkbox').first()).toBeChecked();await page.getByRole('button',{name:/New workspace/}).click();await page.getByRole('button',{name:title,exact:true}).click();await expect(page.getByRole('checkbox').first()).toBeChecked();await expect(card(page,'Focus session')).toBeVisible();
 });
 
@@ -45,12 +46,12 @@ test('budget feedback lives in related tools without an extra next-step panel',a
 });
 
 test('legacy selection is ignored and conditional tools appear and disappear directly',async({page})=>{
- await page.addInitScript(()=>{localStorage.setItem('shadowui.v1',JSON.stringify({active:'conditional',workspaces:[{id:'conditional',title:'Conditional tools',goal:'Review a proposal',description:'Test conditional tools',components:[{id:'approval',type:'approval',title:'Review proposal',reason:'Confirm first',items:[],value:0},{id:'details',type:'notes',title:'Approved details',reason:'Shown after confirmation',items:[],text:'Approved context',visibleWhen:{componentId:'approval',completed:true}}]}]}));localStorage.setItem('shadowui.view.v1:conditional','removed-tool');localStorage.setItem('shadowui.layout.v1:conditional','invalid JSON');});
+ await page.addInitScript(()=>{localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'conditional',workspaces:[{id:'conditional',title:'Conditional tools',goal:'Review a proposal',description:'Test conditional tools',components:[{id:'approval',type:'approval',title:'Review proposal',reason:'Confirm first',items:[],value:0},{id:'details',type:'notes',title:'Approved details',reason:'Shown after confirmation',items:[],text:'Approved context',visibleWhen:{componentId:'approval',completed:true}}]}]}}));localStorage.setItem('shadowui.view.v1:conditional','removed-tool');localStorage.setItem('shadowui.layout.v1:conditional','invalid JSON');});
  await page.goto('/');await expect.poll(async()=>(await saved(page))?.mode).toBe('auto');await expect(page.locator('.r-card:visible')).toHaveCount(1);await page.getByRole('button',{name:'Confirm local plan'}).click();await expect(page.getByRole('textbox',{name:'Approved details'})).toBeVisible();await expect(page.locator('.r-card:visible')).toHaveCount(2);await page.getByRole('button',{name:'Confirmed locally · Undo'}).click();await expect(page.locator('.r-card:visible')).toHaveCount(1);
 });
 
 for(const count of [1,2,6,16])test(`${count} dynamic tools fit desktop and 320px RTL in both themes`,async({page})=>{
- await page.addInitScript(n=>{localStorage.setItem('shadowui.v1',JSON.stringify({active:'many',workspaces:[{id:'many',title:'Many tools',goal:'Organize all my work',description:'A responsive dynamic workspace',components:Array.from({length:n},(_,i)=>({id:`tool-${i}`,type:i%3===0?'table':'notes',title:`Useful tool ${i+1}`,reason:'Relevant context',span:i%3===0?'wide':'normal',text:'Long useful content '.repeat(30),items:i%3===0?[{id:'row',label:'A long descriptive table item that should stay inside its own card',detail:'Table detail '.repeat(12),value:20}]:[]}))}]}));},count);
+ await page.addInitScript(n=>{localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'many',workspaces:[{id:'many',title:'Many tools',goal:'Organize all my work',description:'A responsive dynamic workspace',components:Array.from({length:n},(_,i)=>({id:`tool-${i}`,type:i%3===0?'table':'notes',title:`Useful tool ${i+1}`,reason:'Relevant context',span:i%3===0?'wide':'normal',text:'Long useful content '.repeat(30),items:i%3===0?[{id:'row',label:'A long descriptive table item that should stay inside its own card',detail:'Table detail '.repeat(12),value:20}]:[]}))}]}}));},count);
  await page.goto('/');await expect(page.locator('.r-card:visible')).toHaveCount(count);await geometry(page);await page.setViewportSize({width:320,height:800});if(await page.locator('.shell').getAttribute('dir')!=='rtl')await page.getByRole('button',{name:'Toggle language direction'}).click();await expect(page.locator('.shell')).toHaveAttribute('dir','rtl');
  for(let theme=0;theme<2;theme++){await geometry(page);const options=page.getByLabel(/(?:Layout options for|אפשרויות סידור עבור) Useful tool 1$/);await options.focus();await page.keyboard.press('Enter');await expect(card(page,'Useful tool 1').getByRole('button',{name:/^(Move later|הזזה קדימה)$/})).toBeVisible();await page.keyboard.press('Enter');await page.getByRole('button',{name:'Toggle color theme'}).click();}
 });
@@ -67,26 +68,30 @@ for(const width of [1024,1440])test(`dynamic layout uses readable card widths at
 });
 
 for(const type of ['notes','timer','table'])test(`a lone ${type} uses its natural desktop width`,async({page})=>{
- await page.setViewportSize({width:1440,height:1100});await page.addInitScript(kind=>{localStorage.setItem('shadowui.v1',JSON.stringify({active:'single',workspaces:[{id:'single',title:'Single tool',description:'One relevant tool',goal:'Work on one thing',components:[{id:'single-tool',type:kind,title:'My tool',reason:'Useful work',items:[],text:'A short note',value:25,span:'wide'}]}]}));},type);await page.goto('/');await expect(page.locator('.r-card')).toHaveCount(1);await geometry(page);const width=await page.locator('.r-card').evaluate(el=>el.getBoundingClientRect().width);const available=await page.locator('.r-grid').evaluate(el=>el.getBoundingClientRect().width);if(type==='table')expect(width).toBeGreaterThan(available*.95);else expect(width).toBeLessThan(available*.9);
+ await page.setViewportSize({width:1440,height:1100});await page.addInitScript(kind=>{localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'single',workspaces:[{id:'single',title:'Single tool',description:'One relevant tool',goal:'Work on one thing',components:[{id:'single-tool',type:kind,title:'My tool',reason:'Useful work',items:[],text:'A short note',value:25,span:'wide'}]}]}}));},type);await page.goto('/');await expect(page.locator('.r-card')).toHaveCount(1);await geometry(page);const width=await page.locator('.r-card').evaluate(el=>el.getBoundingClientRect().width);const available=await page.locator('.r-grid').evaluate(el=>el.getBoundingClientRect().width);if(type==='table')expect(width).toBeGreaterThan(available*.95);else expect(width).toBeLessThan(available*.9);
 });
 
 test('notes and checklist share a desktop row when their content fits',async({page})=>{
  await page.setViewportSize({width:1440,height:1100});
- await page.addInitScript(()=>localStorage.setItem('shadowui.v1',JSON.stringify({active:'notes-tasks',workspaces:[{id:'notes-tasks',title:'Notes and tasks',goal:'Organize a project',description:'Project context and actions',components:[{id:'notes',type:'notes',title:'Project context',reason:'Context',text:'Project notes',span:'wide',items:[]},{id:'tasks',type:'checklist',title:'Actions',reason:'Track work',span:'normal',items:[{id:'first',label:'Review the project'}]}]}]})));
+ await page.addInitScript(()=>localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'notes-tasks',workspaces:[{id:'notes-tasks',title:'Notes and tasks',goal:'Organize a project',description:'Project context and actions',components:[{id:'notes',type:'notes',title:'Project context',reason:'Context',text:'Project notes',span:'wide',items:[]},{id:'tasks',type:'checklist',title:'Actions',reason:'Track work',span:'normal',items:[{id:'first',label:'Review the project'}]}]}]}})));
  await page.goto('/');await expect(page.locator('.r-card')).toHaveCount(2);await geometry(page);
  const notes=page.locator('.r-card.tool-notes'),checklist=page.locator('.r-card.tool-checklist');
  await expect.poll(async()=>{const n=await notes.boundingBox(),c=await checklist.boundingBox();return !!n&&!!c&&Math.abs(n.y-c.y)<2;}).toBe(true);
 });
 test('workspace cards reorder by pointer and keyboard and keep their edits after reload',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:/Learn something deeply/}).click();
+ await page.setViewportSize({width:1440,height:1400});
  const cards=page.locator('.r-grid > .r-card');await expect(cards.first()).toBeVisible();
  const ids=await cards.evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-component-id')));
  await page.getByRole('checkbox').first().check();
- const handle=cards.first().getByRole('button',{name:/^(Move|הזזת) /});const from=await handle.boundingBox();const to=await cards.nth(1).boundingBox();
+ const handle=cards.first().getByRole('button',{name:/^(Move|הזזת) /});
+ await cards.nth(1).scrollIntoViewIfNeeded();await handle.scrollIntoViewIfNeeded();
+ const from=await handle.boundingBox();const to=await cards.nth(1).boundingBox();
  if(!from||!to)throw new Error('Missing card bounds');
  await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();await page.mouse.move(to.x+to.width/2,to.y+to.height/2,{steps:10});await page.mouse.up();
  await expect(cards.first()).toHaveAttribute('data-component-id',ids[1]!);
  await expect(cards.nth(1)).toHaveAttribute('data-component-id',ids[0]!);
+ await expect.poll(async()=>(await saved(page))?.order).toEqual([ids[1],ids[0],...ids.slice(2)]);
  await page.reload();await expect(cards.first()).toHaveAttribute('data-component-id',ids[1]!);await expect(page.getByRole('checkbox').first()).toBeChecked();
  await cards.nth(1).getByRole('button',{name:/^(Move|הזזת) /}).press('ArrowUp');await expect(cards.first()).toHaveAttribute('data-component-id',ids[0]!);
 });
