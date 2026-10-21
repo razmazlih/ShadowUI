@@ -1,5 +1,7 @@
 # ShadowUI · RABEN
 
+**תיעוד המערכת בעברית:** [מטרה, יכולות, ארכיטקטורה, נתונים, התקנה ומגבלות](docs/system-overview.he.md).
+
 **When the work changes, the interaction should change with it.** ShadowUI is an adaptive software prototype: express an objective, work inside a composed interface, change the situation, compare solutions, and confirm a verifiable result.
 
 ShadowUI composes interactive tools around goals across scheduling, source-based learning, budgets, comparisons, inventory, documents, and bounded calculations. Task coverage, input readiness, and user-reviewed completion are separate states. Follow-up edits retain compatible work, and the latest local workspace edit can be undone.
@@ -51,7 +53,7 @@ The prompt also supports the explicit constraint “Daniel cannot work Wednesday
 
 ## Hosted demonstration
 
-On non-loopback browser hosts, scheduling runs as a browser-local demo using the same deterministic constraints. Schedule history, revisions and demo confirmation records are saved in localStorage for that browser and origin. They are not backend receipts, are not shared across devices, and disappear when browser data is cleared. Cross-tab writes are not transactionally coordinated. Hosted scheduling does not invoke MCP; the real loopback MCP path remains available when running locally. Paid AI is blocked in the current local simulation phase.
+On non-loopback browser hosts, scheduling runs as a browser-local demo using the same deterministic constraints. Schedule history, revisions and demo confirmation records are saved in localStorage for that browser and origin. They are not backend receipts, are not shared across devices, and disappear when browser data is cleared. Cross-tab writes are not transactionally coordinated. Hosted scheduling does not invoke MCP; the real loopback MCP path remains available when running locally. Paid AI is disabled by default; explicitly configured live environments use the guarded server pipeline described below.
 
 ## Architecture and persistence
 
@@ -72,13 +74,13 @@ flowchart LR
   K --> R
 ```
 
-`lib/schema.ts`, `lib/planner.ts`, and `lib/patch.ts` retain the original compositional engine and stable IDs. Thirteen trusted primitives support checklist, timeline, calendar, kanban, flashcards, quiz, slider, editable table, weighted comparison, notes, timer, approval, and chart. Independent capability rules can combine these for unfamiliar goals. The model produces JSON, never executable application code.
+`lib/schema.ts`, `lib/planner.ts`, and `lib/patch.ts` retain the original compositional engine and stable IDs. Sixteen trusted component types support checklist, timeline, calendar, weekly schedule, kanban, flashcards, quiz, slider, editable table, weighted comparison, notes, timer, approval, chart, links, and custom tools. Independent capability rules can combine these for unfamiliar goals. The model produces JSON, never executable application code.
 
 `lib/schedule.ts` contains the separate domain model, interval-overlap checks, unavailable-date checks, uncovered-shift checks, per-week days-off enforcement and candidate evaluation. `lib/adaptation.ts` selects interaction modes from actual facts and records the objective, trigger, reason, preserved state and allowed actions. Clear conditions run deterministically; configured AI is reserved for semantic interface planning, not ordinary clicks.
 
 `lib/schedule-store.ts` serializes writes in one Node process, validates state and atomically renames local files under `.shadowui/` (ignored by Git). Revisions reject stale writers; action IDs make retries idempotent; confirmed commits produce receipts; undo consumes real history. Storage failures remain errors. `SHADOWUI_DATA_DIR` can select another local directory. This requires a writable persistent filesystem; it is not a multi-process database or an ephemeral-serverless deployment solution.
 
-Browser workspace memory and server scheduling records are separate. Refreshing or switching layouts does not recreate domain data. Clearing browser storage removes navigation references; backend files are not deleted. Workspace JSON export contains the layout/domain reference, not a backup of server history. Running focus countdowns reset on remount, while duration and meaningful task edits persist.
+Browser workspace memory and server scheduling records are separate. Refreshing or switching layouts does not recreate domain data. Clearing browser storage removes navigation references; backend files are not deleted. The current Export button downloads a styled PNG of the workspace, not a recoverable backup of workspace data or server history. Running focus countdowns reset on remount, while duration and meaningful task edits persist.
 
 ## Real MCP capabilities
 
@@ -111,7 +113,7 @@ This unauthenticated demo accepts **loopback hosts only** and rejects cross-orig
 
 The hero intentionally supports the named six-person fixture; a different requested roster size returns an explicit unsupported-constraint error. Dates and slots are fixture data. Employee availability, assignments and minimum days off are editable; dynamic hiring, payroll, qualifications, labor-law compliance and external scheduling integrations are absent. Alternative scores favor lower assigned hours; they are deterministic heuristics, not predictions or a full staffing optimizer. Impossible constraints remain blocked.
 
-The grammar is reusable, but the hero's domain binding and constraints are implemented specifically. Arbitrary unfamiliar workflows can receive local planning controls; they do not gain unimplemented external actions. Nonbiology demo learning asks for user-provided source material. Travel costs and decision scores are editable estimates. Hebrew intent signals and RTL layout work; the full demo shell is English. AI semantic planning, full localization, public hosting, physical Alexa+, user research and measured time savings remain separate unverified work.
+The grammar is reusable, but the hero's domain binding and constraints are implemented specifically. Arbitrary unfamiliar workflows can receive local planning controls; they do not gain unimplemented external actions. Nonbiology demo learning asks for user-provided source material. Travel costs and decision scores are editable estimates. An explicit persisted language control supports Hebrew/RTL and English/LTR; some labels and demo content remain English. Configured live semantic planning and account synchronization are implemented, but their operation in any particular deployment requires verification. Full localization, physical Alexa+, user research and measured time savings are not established by this code.
 
 ## Submission preparation
 
@@ -125,4 +127,4 @@ Internal target: **October 21 evening, Jerusalem time**. Official rules checked 
 
 The simulated provider can create a `custom` tool when the built-in tools do not fit the requested action. It composes named number, text, select and toggle fields with validated local calculations, three layouts (form, metrics, steps), and four accents. The planner avoids default filler cards and explains each tool's purpose. Generation in this phase uses no model request.
 
-Custom definitions are declarative data, not executable code. Calculations support bounded RPN arithmetic (+, -, *, /, min, max); division by zero and non-finite results show errors. Stable field values survive AI adaptations when compatible with new bounds/options. Browser persistence and JSON export include the definition and values. This supports local forms and scenario calculators; arbitrary apps, new network integrations, and external actions require implementation. The simulation also exercises private creation, persistence, and reuse through injected providers.
+Custom definitions are declarative data, not executable code. Calculations support bounded RPN arithmetic (+, -, *, /, min, max); division by zero and non-finite results show errors. Stable field values survive AI adaptations when compatible with new bounds/options. Browser persistence includes the definition and values; the current UI export creates a PNG image. This supports local forms and scenario calculators; arbitrary apps, new network integrations, and external actions require implementation. The simulation also exercises private creation, persistence, and reuse through injected providers.
