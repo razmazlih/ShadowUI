@@ -1,3 +1,4 @@
+import {selectPresentation} from './helpers/display';
 import {test,expect} from '@playwright/test';
 
 for(const width of [1440,1200,390])test(`lesson cards fill the reading column without gaps at ${width}px`,async({page})=>{
@@ -15,7 +16,10 @@ for(const width of [1440,1200,390])test(`lesson cards fill the reading column wi
   const workspace={id:'lesson-layout-test',title:'לומדים מה זה API',description:'הסבר, דוגמה ותרגול',goal:'תלמד אותי מה זה api',components};
   localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{workspaces:[workspace],active:workspace.id}}));
  });
- await page.goto('/');await page.getByRole('button',{name:'Toggle language direction'}).click();
+ await page.goto('/');
+ // These assertions cover the retained reading layout, not the default viewport mode.
+ await selectPresentation(page,'vertical');
+ await page.getByRole('button',{name:'Toggle language direction'}).click();
  await expect(page.locator('.workspace-stage .r-card')).toHaveCount(5);
  await expect.poll(()=>page.locator('.workspace-stage .r-card').evaluateAll(cards=>{
   const canvas=cards[0].closest('.workspace') as HTMLElement;
@@ -26,7 +30,7 @@ for(const width of [1440,1200,390])test(`lesson cards fill the reading column wi
   return availableWidth<880?bounds.every(box=>Math.abs(box.width-bounds[0].width)<2):bounds[2].width<bounds[0].width*.6;
  })).toBe(true);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- if(width===390)await expect(page.locator('.layout-toolbar')).toBeHidden();
+ if(width===390)await expect(page.locator('.layout-toolbar')).toBeVisible();
  await page.screenshot({path:`/tmp/shadowui-lesson-${width}.png`,fullPage:true});
  if(width===1200){
   const settings=page.locator('.layout-settings');
@@ -74,7 +78,7 @@ for(const width of [1440,1200,390])test(`lesson cards fill the reading column wi
   await page.getByRole('button',{name:'סגירת הגדרות תצוגה'}).click();
   await page.setViewportSize({width:700,height:1000});
   await expect.poll(()=>page.locator('.r-card').evaluateAll(cards=>new Set(cards.map(card=>Math.round(card.getBoundingClientRect().width))).size)).toBe(1);
-  await expect(page.locator('.layout-toolbar')).toBeHidden();
+  await expect(page.locator('.layout-toolbar')).toBeVisible();
   await page.setViewportSize({width:1440,height:1000});
   await page.evaluate(()=>{const state=JSON.parse(localStorage.getItem('shadowui.device.v1.guest')!).snapshot;state.workspaces[0].components=state.workspaces[0].components.slice(0,1);localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:state}));});
   await page.reload();

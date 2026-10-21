@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {selectPresentation} from './helpers/display';
 
 async function fillPrompt(page:Page,text:string){
  const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});
@@ -11,6 +12,7 @@ async function minimize(page:Page){const button=page.getByRole('button',{name:/^
 test('intent creates interactive persisted workspace; constraint patches retain work',async({page})=>{
  await page.goto('/');await expect(page.getByRole('heading',{name:/Work changes/})).toBeVisible();
  await page.getByRole('button',{name:/Learn something deeply/}).click();
+ await selectPresentation(page,'vertical');
  await expect(page.getByRole('heading',{name:'Learning progress'})).toBeVisible();
  await page.getByRole('checkbox').first().check();
  await submit(page,'Set focus time to one hour tonight');
@@ -25,6 +27,7 @@ test('intent creates interactive persisted workspace; constraint patches retain 
 test('unfamiliar goal, mobile, MCP discovery and invocation',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');
  await submit(page,'Organize a neighborhood seed exchange');
+ await page.locator('.viewport-tool-nav').getByRole('button',{name:'Working data',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Working data'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
  await page.goto('/mcp-host');await page.getByRole('button',{name:/Run discovery/}).click();
@@ -35,6 +38,7 @@ test('unfamiliar goal, mobile, MCP discovery and invocation',async({page})=>{
 
 test('source quiz and flashcards preserve direct practice and comparison stays editable',async({page})=>{
  await page.goto('/');await submit(page,'Help me study for exam source: ATP: energy; nucleus: DNA');
+ await selectPresentation(page,'vertical');
  await page.getByRole('button',{name:'ATP: reveal answer',exact:true}).click();
  await expect(page.getByRole('button',{name:'ATP: show question',exact:true})).toContainText('energy');
  const question=page.locator('.r-quiz > fieldset').first();
@@ -43,6 +47,7 @@ test('source quiz and flashcards preserve direct practice and comparison stays e
  await page.reload();await expect(page.locator('.r-quiz > fieldset').first()).toContainText('Correct. Well done!');
  await page.getByRole('button',{name:/New workspace/}).click();
  await page.getByRole('button',{name:/Make a better decision/}).click();
+ await selectPresentation(page,'vertical');
  await expect(page.getByRole('heading',{name:'Compare options'})).toBeVisible();
  const score=page.getByRole('spinbutton').first();await score.fill('8');
  await page.reload();await expect(page.getByRole('spinbutton').first()).toHaveValue('8');
@@ -60,6 +65,7 @@ test('schedule availability controls and linked budget calculation are real loca
  await expect(page.getByText(`Daniel is unavailable on ${date}.`,{exact:true})).toBeVisible();
  await page.getByRole('button',{name:/New workspace/}).click();
  await submit(page,'Plan event budget 1000 and expenses');
+ await selectPresentation(page,'vertical');
  const expenses=page.locator('.r-card').filter({has:page.getByRole('heading',{name:'Expenses',exact:true})});
  await expenses.getByRole('textbox',{name:'Add row',exact:true}).fill('Venue');
  await expenses.getByRole('button',{name:'Add row',exact:true}).click();

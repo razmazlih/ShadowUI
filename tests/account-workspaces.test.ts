@@ -1,4 +1,4 @@
-import {guestDeviceData} from '../lib/account-device-data';
+import {guestDeviceData,snapshotDeviceData} from '../lib/account-device-data';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {accountWorkspaceKey,readAccountSyncBase,migrateGuestToAccount,parseWorkspaceSnapshot,readAccountWorkspaces,writeAccountWorkspaces,type WorkspaceStorage} from '../lib/account-workspaces';
@@ -45,6 +45,31 @@ test('raw layout density survives parsing, migration and workspace id remapping'
  const local=storage(),account=snapshot('same','account'),guest=snapshot('same','guest');guest.deviceData={'shadowui.layout.v1:same:density':'comfortable'};
  writeAccountWorkspaces(local,'alice',account);writeAccountWorkspaces(local,null,guest);const migrated=migrateGuestToAccount(local,'alice'),imported=migrated.workspaces.find(w=>w.title==='guest')!;
  assert.equal(migrated.deviceData![`shadowui.layout.v1:${imported.id}:density`],'comfortable');assert.equal(parseWorkspaceSnapshot({deviceData:{'shadowui.layout.v1:x:density':'compact'}}).deviceData!['shadowui.layout.v1:x:density'],'compact');assert.deepEqual(Object.keys(parseWorkspaceSnapshot({deviceData:{'shadowui.layout.v1:x:density':'unexpected'}}).deviceData!),[]);
+});
+test('presentation preferences survive scoped snapshots, guest reload and colliding account migration',()=>{
+ const local=storage(),account=snapshot('same','account'),guest=snapshot('same','guest'),key='shadowui.layout.v1:same:presentation';
+ local.setItem(key,'fit');local.setItem('shadowui.device-data.alice.'+key,'vertical');
+ account.deviceData=snapshotDeviceData(local,account.workspaces,'alice');
+ guest.deviceData=snapshotDeviceData(local,guest.workspaces,null);
+ writeAccountWorkspaces(local,'alice',account);writeAccountWorkspaces(local,null,guest);
+ assert.equal(readAccountWorkspaces(local,'alice').deviceData![key],'vertical');
+ assert.equal(readAccountWorkspaces(local,null).deviceData![key],'fit');
+ // A control edit after the snapshot wins on guest reload, then enters migration.
+ local.setItem(key,'vertical');
+ const reloaded=readAccountWorkspaces(local,null);
+ reloaded.deviceData=guestDeviceData(local,reloaded);
+ assert.equal(reloaded.deviceData[key],'vertical');
+ writeAccountWorkspaces(local,null,reloaded);
+ account.deviceData![key]='fit';writeAccountWorkspaces(local,'alice',account);
+ const migrated=migrateGuestToAccount(local,'alice'),imported=migrated.workspaces.find(w=>w.title==='guest')!;
+ assert.notEqual(imported.id,'same');
+ assert.equal(migrated.deviceData![key],'fit');
+ assert.equal(migrated.deviceData![`shadowui.layout.v1:${imported.id}:presentation`],'vertical');
+ assert.deepEqual(readAccountWorkspaces(local,'alice').deviceData,migrated.deviceData);
+});
+test('presentation parsing accepts only the two raw supported modes',()=>{
+ for(const mode of ['fit','vertical'])assert.equal(parseWorkspaceSnapshot({deviceData:{'shadowui.layout.v1:x:presentation':mode}}).deviceData!['shadowui.layout.v1:x:presentation'],mode);
+ for(const mode of ['other','"fit"','{}','null'])assert.deepEqual(Object.keys(parseWorkspaceSnapshot({deviceData:{'shadowui.layout.v1:x:presentation':mode}}).deviceData!),[]);
 });
 test('schedule domain collisions preserve separate schedules including undo and replay history',()=>{
  const local=storage(),account=snapshot('same','account'),guest=snapshot('same','guest'),domainId='00000000-0000-4000-8000-000000000001',prefix='shadowui.browser-schedule.v1.';
