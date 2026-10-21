@@ -3,12 +3,16 @@ import {test,expect} from '@playwright/test';
 import type {Schedule} from '../../lib/schedule';
 
 test('invalid model specification stays behind validation boundary',async({page})=>{
+ let posts=0;
+ await page.route('**/api/plan',route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{configured:true,storageReady:true,liveEnabled:true,simulation:false}});
+  posts++;return route.fulfill({json:{mode:'live',operation:'create',workspace:{id:'bad',title:'Bad response',goal:'test',description:'test',components:[{id:'execute',type:'javascript',title:'Execute',reason:'unsafe',items:[]}]}}});
+ });
  await page.goto('/');
- await page.route('**/api/plan',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({mode:'live',operation:'create',workspace:{id:'bad',title:'Bad response',goal:'test',description:'test',components:[{id:'execute',type:'javascript',title:'Execute',reason:'unsafe',items:[]}]}})}));
  await page.getByLabel('What do you want to accomplish?').fill('Organize a neighborhood seed exchange');await page.getByRole('button',{name:'Build workspace'}).click();
  await expect(page.locator('.error[role=alert]')).toBeVisible();
  await expect(page.getByRole('heading',{name:/Work changes/})).toBeVisible();
- expect(await guestWorkspaces(page).then(workspaces=>workspaces.length)).toBe(0);
+ expect(await guestWorkspaces(page).then(workspaces=>workspaces.length)).toBe(0);expect(posts).toBe(1);
 });
 
 test('unsupported execution offers functional local alternative without receipt',async({page})=>{
