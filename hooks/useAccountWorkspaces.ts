@@ -8,7 +8,7 @@ import {reconcileSnapshots} from '@/lib/workspace-sync';
 export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:WorkspaceSnapshot)=>void,busy:boolean){
  const [ready,setReady]=useState(false),[owner,setOwner]=useState<string|null>(null),[status,setStatus]=useState('טוען שיחות…');
  const [initialSync,setInitialSync]=useState(false);
- const live=useRef(snapshot),apply=useRef(load),identity=useRef<User|null>(null),initialized=useRef(false),scope=useRef<string|null>(null),base=useRef(parseWorkspaceSnapshot(null)),pending=useRef<User|null|undefined>(undefined),working=useRef(false),blocked=useRef(busy),epoch=useRef(0);
+ const live=useRef(snapshot),apply=useRef(load),identity=useRef<User|null>(null),initialized=useRef(false),scope=useRef<string|null>(null),base=useRef(parseWorkspaceSnapshot(null)),pending=useRef<User|null|undefined>(undefined),working=useRef(false),syncNow=useRef<(()=>void)|null>(null),blocked=useRef(busy),epoch=useRef(0);
  live.current=snapshot;apply.current=load;blocked.current=busy;
  const changeUser=useCallback((user:User|null)=>{
   if(blocked.current){pending.current=user;return;}
@@ -69,10 +69,12 @@ export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:Work
    }catch{if(valid())setStatus('הסנכרון לא הושלם · השיחות נשמרות במכשיר וננסה שוב');}
    finally{working.current=false;if(valid())setInitialSync(false);}
   };
+  syncNow.current=()=>void synchronize();
   const timer=setTimeout(()=>void synchronize(),initialSync?0:800);
   const interval=setInterval(()=>{if(document.visibilityState==='visible')void synchronize();},15000);
   const refresh=()=>void synchronize();window.addEventListener('online',refresh);window.addEventListener('focus',refresh);
-  return()=>{disposed=true;clearTimeout(timer);clearInterval(interval);window.removeEventListener('online',refresh);window.removeEventListener('focus',refresh);};
- },[owner,ready,snapshot,initialSync]);
+  return()=>{disposed=true;syncNow.current=null;clearTimeout(timer);clearInterval(interval);window.removeEventListener('online',refresh);window.removeEventListener('focus',refresh);};
+ },[owner,ready,initialSync]);
+ useEffect(()=>{if(!ready||!owner)return;const timer=setTimeout(()=>syncNow.current?.(),800);return()=>clearTimeout(timer);},[snapshot,owner,ready]);
  return {ready:ready&&!initialSync,owner,status,onUser:changeUser};
 }
