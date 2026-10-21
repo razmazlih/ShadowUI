@@ -302,11 +302,23 @@ test('records a normal-motion tour of grouping, expansion and navigation resize'
  try{
   await openWorkspace(page);
   await page.waitForTimeout(500);
-  await chooseTool(page,'Calculator');
-  const fade=await page.locator('#tool-reading').evaluate(element=>new Promise<Array<{opacity:number;visible:boolean;inert:boolean}>>(resolve=>{
-   const samples:Array<{opacity:number;visible:boolean;inert:boolean}>=[];const start=performance.now();
-   function sample(){const style=getComputedStyle(element);samples.push({opacity:Number(style.opacity),visible:style.display!=='none',inert:(element as HTMLElement).inert});if(performance.now()-start<280)requestAnimationFrame(sample);else resolve(samples);}sample();
+  // Install the sampler before the click: CI may finish the fade while a
+  // separate browser command is being scheduled after navigation.
+  const fadePromise=page.locator('#tool-reading').evaluate(element=>new Promise<Array<{opacity:number;visible:boolean;inert:boolean}>>(resolve=>{
+   const samples:Array<{opacity:number;visible:boolean;inert:boolean}>=[];
+   let started:number|undefined;
+   function sample(){
+    const style=getComputedStyle(element),inert=(element as HTMLElement).inert;
+    if(inert){started??=performance.now();samples.push({opacity:Number(style.opacity),visible:style.display!=='none',inert});}
+    if(started!==undefined&&performance.now()-started>=280)resolve(samples);else requestAnimationFrame(sample);
+   }
+   element.setAttribute('data-motion-sampling','ready');
+   sample();
   }));
+  await expect(page.locator('#tool-reading')).toHaveAttribute('data-motion-sampling','ready');
+  await chooseTool(page,'Calculator');
+  const fade=await fadePromise;
+  await page.locator('#tool-reading').evaluate(element=>element.removeAttribute('data-motion-sampling'));
   expect(fade.every(sample=>sample.inert)).toBe(true);
   expect(fade.some(sample=>sample.visible&&sample.opacity>0&&sample.opacity<1)).toBe(true);
   expect(fade.at(-1)?.visible).toBe(false);

@@ -1,3 +1,4 @@
+import {selectPresentation} from './helpers/display';
 import {activeWorkspaceId} from './helpers/storage';
 import {test,expect,type Page} from '@playwright/test';
 
@@ -53,6 +54,7 @@ test('real simulation inventory computes per-item shortage, restores edits, and 
 test('real simulation expense edits update the table total, linked chart and remaining budget',async({page})=>{
  const paid=paidTraffic(page);
  await compose(page,'תכנון אירוע עם תקציב 1000 והוצאות');
+ await selectPresentation(page,'vertical');
  const expenses=tool(page,'הוצאות');
  await expenses.getByRole('textbox',{name:'Add row',exact:true}).fill('אולם');
  await expenses.getByRole('button',{name:'Add row',exact:true}).click();
@@ -97,6 +99,7 @@ test('real simulation calculator recomputes valid input and reports an empty num
 test('source edits regenerate study cards and clear obsolete quiz grading without model calls',async({page})=>{
  const paid=paidTraffic(page);
  await compose(page,'Help me study for exam source: ATP: energy; nucleus: DNA');
+ await selectPresentation(page,'vertical');
  const cards=tool(page,'Source flashcards'),quiz=tool(page,'Source practice');
  await cards.getByRole('button',{name:'ATP: reveal answer',exact:true}).click();
  await expect(cards.getByRole('button',{name:'ATP: show question',exact:true})).toContainText('energy');
