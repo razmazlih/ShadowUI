@@ -92,6 +92,23 @@ export function moveViewportTool(pages: string[][], id: string, targetPage: numb
   return next.filter(page => page.length);
 }
 
+/** Replace a page's tool selection; displaced tools remain available on its next page. */
+export function setViewportPageTools(pages: string[][], targetIndex: number, selectedIds: string[]): string[][] {
+  const unchanged = () => pages.map(page => [...page]);
+  const known = new Set(pages.flat());
+  const selected = new Set(selectedIds);
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= pages.length
+    || !selectedIds.length || selected.size !== selectedIds.length
+    || selectedIds.some(id => !known.has(id))) return unchanged();
+  const displaced = pages[targetIndex].filter(id => !selected.has(id));
+  const next = pages.map((page, index) => index === targetIndex ? [...selectedIds] : page.filter(id => !selected.has(id)));
+  if (displaced.length) {
+    const destination = targetIndex + 1;
+    next[destination] = [...(next[destination] ?? []), ...displaced];
+  }
+  return next.filter(page => page.length);
+}
+
 export function parseViewportPages(value: unknown): string[][] | null {
   if (!Array.isArray(value) || value.length > 16) return null;
   const seen = new Set<string>();

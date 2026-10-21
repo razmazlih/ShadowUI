@@ -129,17 +129,9 @@
 .page-arrow:disabled{opacity:.3;cursor:default}
 .page-edit-toggle{padding-inline:9px}
 .page-edit-toggle[aria-expanded=true]{color:var(--accent);border-color:var(--accent)}
-.page-editor{flex:none;overflow:hidden;border-radius:12px;background:var(--soft)}
-.page-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;font-size:11px;color:var(--muted)}
-.page-editor-tools{display:flex;gap:8px;overflow:auto;max-height:140px;padding:0 10px 8px}
-.page-editor-tools label{display:flex;align-items:center;gap:8px;flex:none;max-width:260px;font-size:11px;border:1px solid var(--line);padding:6px 8px;border-radius:8px;background:var(--panel)}
-.page-editor-tools label>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.page-editor-tools select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px;font:inherit;max-width:85px}
-.page-editor .page-reset{margin:0 10px 8px;padding:5px 9px}
 @media(max-width:680px){.page-tabs button{max-width:190px}.page-edit-toggle span{display:none}.page-edit-toggle{width:32px}.page-navigation{gap:3px}}
 @media(prefers-reduced-motion:reduce){.page-tabs button{transition:none}}
 .workspace-stage{position:relative}
-.page-editor{position:absolute;inset-inline-end:0;top:86px;width:min(600px,100%);max-height:min(260px,50dvh);overflow:auto;z-index:25;border:1px solid var(--line);background:var(--panel);box-shadow:0 14px 44px #0003}
 .page-tabs button:focus-visible,.page-arrow:focus-visible,.page-edit-toggle:focus-visible,.page-editor button:focus-visible,.page-editor select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Contain Safari's horizontal overscroll instead of allowing a back/forward gesture. */
 html:has(.viewport-fit),body:has(.viewport-fit){overscroll-behavior-x:none}
@@ -147,3 +139,29 @@ html:has(.viewport-fit),body:has(.viewport-fit){overscroll-behavior-x:none}
 .viewport-fit .r-card-header,.viewport-fit .r-card-content:not(:has(.r-table-wrap,.r-week-grid,.r-kanban)){touch-action:pan-y pinch-zoom}
 /* Page travel is one compositor transform, never overlapping individual cards. */
 .shell .viewport-fit .workspace-surface{overflow:clip;overflow-clip-margin:2px}
+
+/* Choose tools once in a readable grid; no sideways form or per-tool page menus. */
+.page-editor-backdrop{touch-action:pan-y pinch-zoom;position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#0007;overscroll-behavior:contain}
+.page-editor{display:flex;flex-direction:column;width:min(720px,100%);min-width:0;max-height:calc(100dvh - 40px);padding:20px;gap:16px;border:1px solid var(--line);border-radius:20px;background:var(--panel);color:var(--text);box-shadow:0 24px 90px #0005;overflow:hidden;font-family:inherit}
+.page-editor-heading{height:auto;padding:0;border:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex:none}
+.page-editor-heading h2{font-size:19px;line-height:1.4;margin:0 0 5px;font-weight:650;letter-spacing:-.3px}
+.page-editor-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.page-editor-heading>button{width:34px;height:34px;padding:6px}
+.page-editor-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:2px;scrollbar-width:thin}
+.page-editor-tools label{display:flex;align-items:center;gap:9px;min-width:0;min-height:58px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer;transition:background-color .16s,border-color .16s}
+.page-editor-tools label.is-selected{background:color-mix(in srgb,var(--accent) 9%,var(--panel));border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.page-editor-tools input{width:16px;height:16px;flex:none;margin:0;accent-color:var(--accent);cursor:pointer}
+.page-editor-tools label>svg{flex:none;color:var(--muted)}
+.page-editor-tools label.is-selected>svg{color:var(--accent)}
+.page-tool-copy{min-width:0;display:flex;flex-direction:column;gap:3px}
+.page-tool-copy strong{font-size:12px;line-height:1.4;font-weight:550;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.page-tool-copy small{font-size:10px;line-height:1.2;color:var(--muted)}
+.page-editor-capacity{flex:none;font-size:11px;line-height:1.4;color:var(--muted);margin:0}
+.page-editor-actions{height:auto;margin:0;padding:0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;padding-top:12px;border-top:1px solid var(--line)}
+.page-editor-actions button{min-height:38px;padding:8px 14px;font-size:12px}
+.page-editor-actions .page-reset{border-color:transparent;background:transparent}
+.page-editor-actions .page-apply{background:var(--accent);border-color:var(--accent);color:#231d19;font-weight:650}
+.page-editor-actions .page-apply:disabled{opacity:.4;cursor:default}
+.page-editor-tools label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+@media(max-width:680px){.page-editor-backdrop{padding:10px}.page-editor{padding:14px;gap:12px;max-height:calc(100dvh - 20px);border-radius:16px}.page-editor-heading h2{font-size:16px}.page-editor-heading p{font-size:11px}.page-editor-tools{gap:6px}.page-editor-tools label{padding:7px;gap:6px;min-height:54px}.page-editor-tools label>svg{display:none}.page-tool-copy strong{font-size:11px}.page-tool-copy small{font-size:9px}.page-editor-actions button{padding-inline:9px;font-size:11px}}
+@media(prefers-reduced-motion:reduce){.page-editor-tools label{transition:none}}

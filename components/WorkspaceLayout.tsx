@@ -1,10 +1,11 @@
 'use client';
 
 import {useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
+import {createPortal} from 'react-dom';
 import {AnimatePresence, animate, motion, useMotionValue, useIsPresent, useReducedMotion, type HTMLMotionProps, type MotionStyle} from 'motion/react';
 import {GripVertical, MoreHorizontal, MoveDiagonal2, Maximize2, Minimize2, SlidersHorizontal, ChevronLeft, ChevronRight, X} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
-import {viewportLayout, moveViewportTool, parseViewportPages, automaticLayout, columnLayout, isLessonLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
+import {viewportLayout, setViewportPageTools, parseViewportPages, automaticLayout, columnLayout, isLessonLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
 import {createPageWheelGesture, updatePageWheelGesture} from '@/lib/workspace-page-gesture';
 import {deviceDataStorage} from '@/lib/account-device-data';
 import {toolIcons, toolLabel} from './tool-metadata';
@@ -37,6 +38,8 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const [motionWorkspace,setMotionWorkspace]=useState<string|null>(null);
  const [pagePreferences,setPagePreferences]=useState<Record<string,string[][]>>({});
  const [pageEditor,setPageEditor]=useState(false);
+ const [pageDraft,setPageDraft]=useState<string[]>([]);
+ const editorDialog=useRef<HTMLDivElement>(null);
  const swipe=useRef<{x:number;y:number;blocked:boolean}|null>(null);
  const wheelGesture=useRef(createPageWheelGesture());
  const pageOffset=useMotionValue(0);
@@ -214,16 +217,26 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   return()=>{surface.removeEventListener('wheel',wheel);surface.removeEventListener('touchmove',touchMove);};
  });
  useEffect(()=>{
-  if(!expanded)return;
+  if(!expanded||pageEditor)return;
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setExpandedId(null);requestAnimationFrame(()=>expansionTrigger.current?.focus({preventScroll:true}));}};
   document.addEventListener('keydown',escape);return()=>document.removeEventListener('keydown',escape);
- },[expanded]);
+ },[expanded,pageEditor]);
  useEffect(()=>{
   if(!pageEditor)return;
-  const dismiss=(event:globalThis.PointerEvent)=>{if(event.target instanceof Element&&!event.target.closest('.page-editor,.page-edit-toggle'))setPageEditor(false);};
-  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();setPageEditor(false);stage.current?.querySelector<HTMLButtonElement>('.page-edit-toggle')?.focus({preventScroll:true});}};
-  document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);
-  return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape);};
+  const frame=requestAnimationFrame(()=>editorDialog.current?.querySelector<HTMLInputElement>('input')?.focus({preventScroll:true}));
+  const keyboard=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'){event.preventDefault();setPageEditor(false);return;}
+   if(event.key!=='Tab')return;
+   const controls=[...editorDialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')??[]];
+   const first=controls[0],last=controls.at(-1);
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  };
+  const backdrop=editorDialog.current?.parentElement;
+  const wheel=(event:WheelEvent)=>{if(!event.ctrlKey&&Math.abs(event.deltaX)>Math.abs(event.deltaY))event.preventDefault();};
+  backdrop?.addEventListener('wheel',wheel,{passive:false});
+  document.addEventListener('keydown',keyboard);
+  return()=>{cancelAnimationFrame(frame);backdrop?.removeEventListener('wheel',wheel);document.removeEventListener('keydown',keyboard);requestAnimationFrame(()=>stage.current?.querySelector<HTMLButtonElement>('.page-edit-toggle')?.focus({preventScroll:true}));};
  },[pageEditor]);
  // Place menus against the viewport, so scrollable card bodies cannot clip them.
  function positionMenu(details:HTMLDetailsElement){
@@ -243,7 +256,12 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   try{deviceDataStorage().setItem(`${storageKey}:presentation`,value);}catch{setStorageWarning(true);}
  }
  function savePages(next:Record<string,string[][]>){setPagePreferences(next);try{deviceDataStorage().setItem(`${storageKey}:pages`,JSON.stringify(next));}catch{setStorageWarning(true);}}
- function assignPage(id:string,index:number){savePages({...pagePreferences,[pageProfile]:moveViewportTool(viewport.groups.map(page=>page.ids),id,index)});setSelectedId(id);setExpandedId(null);}
+ function openPageEditor(){setPageDraft([...(group?.ids??[])]);setPageEditor(true);}
+ function applyPageDraft(){
+  const ids=layout.order.filter(id=>pageDraft.includes(id));if(!ids.length)return;
+  savePages({...pagePreferences,[pageProfile]:setViewportPageTools(viewport.groups.map(page=>page.ids),groupIndex,ids)});
+  setSelectedId(ids[0]);setExpandedId(null);setPageEditor(false);setAnnouncement(he?'הדף עודכן ושאר הכלים סודרו אוטומטית':'Page updated; remaining tools arranged automatically');
+ }
  function resetPages(){const next={...pagePreferences};delete next[pageProfile];savePages(next);setAnnouncement(he?'החלוקה האוטומטית חזרה':'Automatic pages restored');}
  function selectTool(id:string){setSelectedId(id);setExpandedId(null);stage.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(menu=>{menu.open=false;});}
  function expandTool(id:string,button:HTMLButtonElement){
@@ -321,7 +339,9 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  useEffect(()=>()=>{gesture.current=null;pageAnimation.current?.stop();if(wheelSettle.current)clearTimeout(wheelSettle.current);},[]);
  const pointerHandlers={onPointerMove:update,onPointerUp:(e:PointerEvent<HTMLButtonElement>)=>finish(e),onPointerCancel:(e:PointerEvent<HTMLButtonElement>)=>finish(e,true),onLostPointerCapture:cancel,onKeyDown:(e:React.KeyboardEvent<HTMLButtonElement>)=>{if(e.key==='Escape')cancel();}};
  const byId=new Map(components.map(c=>[c.id,c]));
- return <div ref={stage} data-layout-ready={initialized} aria-busy={!initialized} inert={!initialized} style={{visibility:initialized?'visible':'hidden'}} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
+ const draftTools=layout.order.filter(id=>pageDraft.includes(id));
+ const draftFits=viewportLayout(components.filter(component=>draftTools.includes(component.id)),draftTools,availableWidth,availableHeight).groups[0]?.ids.length??0;
+ return <div ref={stage} data-layout-ready={initialized} aria-busy={!initialized} inert={!initialized||pageEditor} style={{visibility:initialized?'visible':'hidden'}} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
   <div className="viewport-controls">
 
   {<div className="layout-toolbar"><details className="layout-settings" onToggle={event=>positionMenu(event.currentTarget)} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה':'Display'}</span><span>{fit?(he?'התאמה למסך':'Fit to screen'):layout.mode==='auto'?(he?'אנכית · אוטומטי':'Vertical · Automatic'):(he?'אנכית · מותאם אישית':'Vertical · Custom')}</span></summary><div className="layout-settings-panel">
@@ -343,13 +363,16 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
     </button>;
    })}</nav>
    <button type="button" className="page-arrow" aria-label={he?'הדף הבא':'Next page'} disabled={groupIndex===viewport.groups.length-1} onClick={()=>goPage(groupIndex+1)}>{he?<ChevronLeft size={17}/>:<ChevronRight size={17}/>}</button>
-   <button type="button" className="page-edit-toggle" aria-expanded={pageEditor} onClick={()=>setPageEditor(value=>!value)}><SlidersHorizontal size={15}/><span>{he?'עריכת דף':'Edit page'}</span></button>
+   <button type="button" className="page-edit-toggle" aria-label={he?'עריכת דף':'Edit page'} aria-expanded={pageEditor} onClick={openPageEditor}><SlidersHorizontal size={15}/><span>{he?'עריכת דף':'Edit page'}</span></button>
   </div>}
-  <AnimatePresence initial={false}>{fit&&pageEditor&&<motion.div className="page-editor" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:reducedMotion?0:.2}}>
-   <div className="page-editor-heading"><span>{he?'החלוקה מותאמת למסך אוטומטית. אפשר להעביר כלי לדף אחר.':'Pages fit your screen automatically. Move a tool only if needed.'}</span><button type="button" aria-label={he?'סגירת עריכת דף':'Close page editor'} onClick={()=>setPageEditor(false)}><X size={15}/></button></div>
-   <div className="page-editor-tools">{layout.order.map(id=><label key={id}><span>{byId.get(id)?.title}</span><select aria-label={`${he?'דף עבור':'Page for'} ${byId.get(id)?.title}`} value={viewport.groups.findIndex(page=>page.ids.includes(id))} onChange={event=>assignPage(id,Number(event.target.value))}>{viewport.groups.map((page,index)=><option key={index} value={index}>{he?'דף':'Page'} {index+1}</option>)}<option value={viewport.groups.length}>{he?'דף חדש':'New page'}</option></select></label>)}</div>
-   <button type="button" className="page-reset" onClick={resetPages}>{he?'חזרה לחלוקה אוטומטית':'Reset to automatic pages'}</button>
-  </motion.div>}</AnimatePresence>
+  {typeof document!=='undefined'&&createPortal(<AnimatePresence initial={false}>{fit&&pageEditor&&<motion.div className="page-editor-backdrop" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:reducedMotion?0:.16}} onPointerDown={event=>{if(event.target===event.currentTarget)setPageEditor(false);}}>
+   <motion.div ref={editorDialog} className="page-editor" role="dialog" aria-modal="true" aria-labelledby={`page-editor-title-${workspaceId}`} aria-describedby={`page-editor-help-${workspaceId}`} dir={he?'rtl':'ltr'} initial={reducedMotion?false:{y:8,scale:.985}} animate={{y:0,scale:1}} exit={reducedMotion?{}:{y:4,scale:.99}} transition={{duration:reducedMotion?0:.18,ease:[.22,1,.36,1]}}>
+    <header className="page-editor-heading"><div><h2 id={`page-editor-title-${workspaceId}`}>{he?`הכלים בדף ${groupIndex+1}`:`Tools on page ${groupIndex+1}`}</h2><p id={`page-editor-help-${workspaceId}`}>{he?'בחרו את הכלים שחשובים כאן. היתר מסתדרים לבד.':'Choose the tools you want here. The rest arrange themselves.'}</p></div><button type="button" aria-label={he?'סגירת עריכת דף':'Close page editor'} onClick={()=>setPageEditor(false)}><X size={18}/></button></header>
+    <div className="page-editor-tools">{layout.order.map(id=>{const component=byId.get(id);if(!component)return null;const Icon=toolIcons[component.type];const page=viewport.groups.findIndex(page=>page.ids.includes(id));return <label key={id} className={pageDraft.includes(id)?'is-selected':''} title={component.title}><input type="checkbox" aria-label={component.title} checked={pageDraft.includes(id)} onChange={event=>setPageDraft(previous=>event.target.checked?[...previous,id]:previous.filter(item=>item!==id))}/><Icon size={17} aria-hidden="true"/><span className="page-tool-copy"><strong>{component.title}</strong><small>{page===groupIndex?(he?'בדף הזה':'On this page'):`${he?'בדף':'On page'} ${page+1}`}</small></span></label>;})}</div>
+    <p className="page-editor-capacity" role="status">{!draftTools.length?(he?'בחרו לפחות כלי אחד.':'Choose at least one tool.'):draftFits===draftTools.length?(he?`${draftTools.length} כלים · מתאימים למסך הזה`:`${draftTools.length} tools · fit this screen`):(he?`${draftFits} כלים כאן · היתר ימשיכו אוטומטית לדפים הבאים`:`${draftFits} tools here · the rest continue automatically on following pages`)}</p>
+    <footer className="page-editor-actions"><button type="button" className="page-reset" onClick={()=>{resetPages();setPageEditor(false);}}>{he?'חזרה לאוטומטי':'Reset to automatic'}</button><button type="button" className="page-apply" disabled={!draftTools.length} onClick={applyPageDraft}>{he?'עדכון הדף':'Apply to page'}</button></footer>
+   </motion.div>
+  </motion.div>}</AnimatePresence>,stage.current?.closest('.shell')??document.body)}
 
   {announcement&&<p className={fit?"layout-feedback sr-only":"layout-feedback"} role="status">{announcement}</p>}
   {storageWarning&&<p className="r-feedback r-small" role="status">{he?'לא ניתן לשמור את הסידור בדפדפן הזה. הוא יישמר כל עוד העמוד פתוח.':'This browser could not save the layout. It will last while this page stays open.'}</p>}

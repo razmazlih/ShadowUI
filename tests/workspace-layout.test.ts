@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { UIComponent } from '../lib/schema';
-import { automaticLayout, columnLayout, parseLayout, reconcileLayout, viewportLayout, moveViewportTool, parseViewportPages } from '../lib/workspace-layout';
+import { automaticLayout, columnLayout, parseLayout, reconcileLayout, viewportLayout, moveViewportTool, parseViewportPages, setViewportPageTools } from '../lib/workspace-layout';
 
 const component = (id: string, type: UIComponent['type'] = 'chart'): UIComponent => ({ id, type, title: id, reason: '', span: 'normal', items: [] });
 
@@ -300,5 +300,33 @@ test('persisted page choices reject malformed, duplicated and unsafe tool identi
   assert.deepEqual(parseViewportPages([]), []);
   for (const value of [null, {}, [[]], [['a'], ['a']], [['__proto__']], [[1]], [Array.from({ length: 17 }, (_, i) => String(i))]]) {
     assert.equal(parseViewportPages(value), null);
+  }
+});
+
+
+test('batch page selection preserves every tool, untouched order and input arrays', () => {
+  const pages = [['a', 'b'], ['c'], ['d', 'e']];
+  const chosen = ['d', 'a'];
+  const next = setViewportPageTools(pages, 1, chosen);
+  assert.deepEqual(next, [['b'], ['d', 'a'], ['e', 'c']]);
+  assert.deepEqual(next.flat().sort(), pages.flat().sort());
+  assert.equal(new Set(next.flat()).size, pages.flat().length);
+  assert.deepEqual(pages, [['a', 'b'], ['c'], ['d', 'e']]);
+  assert.deepEqual(chosen, ['d', 'a']);
+});
+
+test('batch selection creates a following page for displaced tools and removes emptied pages', () => {
+  assert.deepEqual(setViewportPageTools([['a', 'b']], 0, ['b']), [['b'], ['a']]);
+  assert.deepEqual(setViewportPageTools([['a'], ['b', 'c']], 1, ['a', 'b']), [['a', 'b'], ['c']]);
+  assert.deepEqual(setViewportPageTools([['a'], ['b'], ['c']], 1, ['a', 'c']), [['a', 'c'], ['b']]);
+});
+
+test('invalid batch selections are safe no-ops with independent arrays', () => {
+  const pages = [['a', 'b'], ['c']];
+  for (const [index, ids] of [[-1, ['a']], [2, ['a']], [0.5, ['a']], [0, []], [0, ['missing']], [0, ['a', 'a']]] as Array<[number, string[]]>) {
+    const result = setViewportPageTools(pages, index, ids);
+    assert.deepEqual(result, pages);
+    assert.notEqual(result, pages);
+    assert.notEqual(result[0], pages[0]);
   }
 });

@@ -368,19 +368,22 @@ test('page navigation, horizontal gestures and optional assignments preserve dra
  await expect(page.locator('#tool-reading textarea')).toHaveValue('Draft remains across pages');
  await page.locator('#tool-reading textarea').dispatchEvent('wheel',{deltaX:0,deltaY:200});
  await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await page.getByRole('button',{name:'Next page',exact:true}).click();
  await page.getByRole('button',{name:'Edit page',exact:true}).click();
- const count=await tabs.count();
- await page.getByRole('combobox',{name:'Page for Reading',exact:true}).selectOption(String(count));
+ const editor=page.getByRole('dialog');
+ for(const checkbox of await editor.locator('input:checked').all())await checkbox.uncheck();
+ await editor.getByRole('checkbox',{name:'Reading',exact:true}).check();
+ await editor.getByRole('button',{name:'Apply to page',exact:true}).click();
+ await expect(editor).toBeHidden();
  await expect(page.locator('#tool-reading')).toBeVisible();
  await expect(page.locator('.page-tabs [aria-current=page]')).toHaveCount(1);
- await page.getByRole('button',{name:'Close page editor'}).click();
  await page.reload();
  await chooseTool(page,'Reading');
  await expect(page.locator('#tool-reading textarea')).toHaveValue('Draft remains across pages');
  await page.getByRole('button',{name:'Edit page',exact:true}).click();
- await page.getByRole('button',{name:'Reset to automatic pages'}).click();
+ await page.getByRole('button',{name:'Reset to automatic'}).click();
  await expect(tabs.first()).toHaveAttribute('aria-label',firstLabel!);
- await page.getByRole('button',{name:'Close page editor'}).click();
+ await expect(page.getByRole('dialog')).toBeHidden();
  await page.screenshot({path:'output/playwright/workspace-pages-desktop.png'});
  await expectBounded(page);
 });
@@ -465,4 +468,25 @@ test('a page moves as one surface without crossfading or resizing its cards',asy
   expect(sample.opacity.every(value=>value===1)).toBe(true);
   sample.bounds.forEach((rect,index)=>rect.forEach((value,axis)=>expect(Math.abs(value-final.bounds[index][axis])).toBeLessThan(1.5)));
  }
+});
+
+for(const [width,height,he] of [[1440,900,false],[1366,768,true],[390,844,false],[320,568,true]] as const)test(`page editor shows 16 tools without sideways scrolling at ${width}px, ${he?'RTL':'LTR'}`,async({page})=>{
+ await page.setViewportSize({width,height});
+ await openWorkspace(page,{he});
+ if(width===1440)await page.getByRole('button',{name:'Toggle color theme'}).click();
+ const before=await page.locator('.page-tabs button').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')));
+ await page.getByRole('button',{name:he?'עריכת דף':'Edit page',exact:true}).click();
+ const editor=page.getByRole('dialog');
+ await expect(editor).toBeVisible();
+ await expect(editor.getByRole('checkbox')).toHaveCount(16);
+ await expect(editor.getByRole('combobox')).toHaveCount(0);
+ expect(await editor.evaluate(element=>[element,...element.querySelectorAll('.page-editor-tools,label,.page-editor-actions')].every(node=>node.scrollWidth<=node.clientWidth+1))).toBe(true);
+ await expectInViewport(editor);
+ const close=editor.getByRole('button',{name:he?'סגירת עריכת דף':'Close page editor'});
+ await close.focus();await page.keyboard.press('Shift+Tab');
+ await expect(editor.getByRole('button',{name:he?'עדכון הדף':'Apply to page'})).toBeFocused();
+ await page.screenshot({path:`output/playwright/page-editor-grid-${width}-${he?'rtl':'ltr'}.png`});
+ await page.keyboard.press('Escape');await expect(editor).toBeHidden();
+ await expect(page.getByRole('button',{name:he?'עריכת דף':'Edit page',exact:true})).toBeFocused();
+ expect(await page.locator('.page-tabs button').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(before);
 });
