@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-for(const width of [1440,390])test(`lesson cards fill the reading column without gaps at ${width}px`,async({page})=>{
+for(const width of [1440,1200,390])test(`lesson cards fill the reading column without gaps at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});
  await page.route('**/api/plan',route=>route.fulfill({json:{configured:false,storageReady:true,simulation:true,liveEnabled:false}}));
  await page.addInitScript(()=>{
@@ -25,6 +25,22 @@ for(const width of [1440,390])test(`lesson cards fill the reading column without
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  if(width===390)await expect(page.locator('.layout-toolbar')).toBeHidden();
  await page.screenshot({path:`/tmp/shadowui-lesson-${width}.png`,fullPage:true});
+ if(width===1200){
+  const settings=page.locator('.layout-settings');
+  await expect(settings).toBeVisible();
+  await settings.locator('summary').click();
+  const two=page.getByRole('button',{name:'שתי עמודות',exact:true});
+  await two.click();
+  await expect(two).toHaveAttribute('aria-pressed','true');
+  await expect.poll(()=>page.locator('.r-card').evaluateAll(cards=>Math.abs(cards[0].getBoundingClientRect().top-cards[1].getBoundingClientRect().top))).toBeLessThan(2);
+  await page.reload();
+  await settings.locator('summary').click();
+  await expect(two).toHaveAttribute('aria-pressed','true');
+  await page.screenshot({path:'/tmp/shadowui-two-columns-1200.png',fullPage:true});
+  await page.setViewportSize({width:390,height:900});
+  await expect.poll(()=>page.locator('.r-card').evaluateAll(cards=>Math.abs(cards[0].getBoundingClientRect().left-cards[1].getBoundingClientRect().left))).toBeLessThan(2);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
  if(width===1440){
   const settings=page.locator('.layout-settings');
   await settings.locator('summary').first().click();
@@ -60,7 +76,10 @@ for(const width of [1440,390])test(`lesson cards fill the reading column without
   await page.evaluate(()=>{const state=JSON.parse(localStorage.getItem('shadowui.device.v1.guest')!).snapshot;state.workspaces[0].components=state.workspaces[0].components.slice(0,1);localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:state}));});
   await page.reload();
   await expect(page.locator('.r-card')).toHaveCount(1);
-  await expect(page.locator('.layout-toolbar')).toHaveCount(0);
+  await expect(page.locator('.layout-toolbar')).toBeVisible();
+  await settings.locator('summary').click();
+  await columns.getByRole('button',{name:'שתי עמודות',exact:true}).click();
+  await expect(columns.getByRole('button',{name:'שתי עמודות',exact:true})).toHaveAttribute('aria-pressed','true');
 
  }
 
