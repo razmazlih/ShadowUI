@@ -17,11 +17,14 @@ for(const width of [1440,1200,390])test(`lesson cards fill the reading column wi
  });
  await page.goto('/');await page.getByRole('button',{name:'Toggle language direction'}).click();
  await expect(page.locator('.workspace-stage .r-card')).toHaveCount(5);
- await expect.poll(()=>page.locator('.workspace-stage .r-card').evaluateAll((cards,width)=>{
+ await expect.poll(()=>page.locator('.workspace-stage .r-card').evaluateAll(cards=>{
+  const canvas=cards[0].closest('.workspace') as HTMLElement;
+  const style=getComputedStyle(canvas);
+  const availableWidth=canvas.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
   const bounds=cards.map(card=>card.getBoundingClientRect());
   if(bounds[1].top-bounds[0].bottom<10||bounds[1].top-bounds[0].bottom>20)return false;
-  return width<880?bounds.every(box=>Math.abs(box.width-bounds[0].width)<2):bounds[2].width<bounds[0].width*.6;
- },width)).toBe(true);
+  return availableWidth<880?bounds.every(box=>Math.abs(box.width-bounds[0].width)<2):bounds[2].width<bounds[0].width*.6;
+ })).toBe(true);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  if(width===390)await expect(page.locator('.layout-toolbar')).toBeHidden();
  await page.screenshot({path:`/tmp/shadowui-lesson-${width}.png`,fullPage:true});
