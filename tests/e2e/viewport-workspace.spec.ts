@@ -359,9 +359,9 @@ test('page navigation, horizontal gestures and optional assignments preserve dra
  const firstLabel=await tabs.first().getAttribute('aria-label');
  await page.locator('#tool-reading textarea').fill('Draft remains across pages');
  const surface=page.locator('.workspace-surface');
- await surface.dispatchEvent('wheel',{deltaX:150,deltaY:0});
- await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
- await surface.dispatchEvent('wheel',{deltaX:150,deltaY:0});
+ // Both samples belong to one momentum burst. Separate driver commands can
+ // exceed the deliberate-gesture quiet window on a loaded CI runner.
+ await surface.evaluate(element=>{for(let sample=0;sample<2;sample++)element.dispatchEvent(new WheelEvent('wheel',{deltaX:150,deltaY:0,bubbles:true,cancelable:true}));});
  await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
  await page.getByRole('button',{name:'Previous page',exact:true}).click();
  await expect(tabs.first()).toHaveAttribute('aria-current','page');
