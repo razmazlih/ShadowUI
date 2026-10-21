@@ -69,10 +69,14 @@ test('response notices and errors belong only to their conversation',async({page
  const input=page.getByLabel('What do you want to accomplish?');
  const openAssistant=async()=>{
   const launcher=page.getByRole('button',{name:'Open assistant',exact:true});
-  if(await launcher.isVisible())await launcher.click();
+  // Each conversation mounts its own minimized assistant after the scene transition.
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await expect(input).toBeVisible();
  };
  const select=async(title:string)=>{
   await page.locator('.workspace-history-open').filter({hasText:title}).click();
+  await expect(page.getByRole('textbox',{name:`${title} notes`,exact:true})).toBeVisible();
   await openAssistant();
  };
  const send=async(prompt:string)=>{
