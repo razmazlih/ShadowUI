@@ -43,7 +43,7 @@ Use `OPENAI_API_KEY=''` on the local server when running mocked browser tests to
 
 - Generation currently adds bounded local calculators and input forms. Existing primitives cover other local editing tasks; arbitrary generated code and unimplemented integrations remain unavailable.
 - Formula syntax/finite outputs are checked; universal semantic correctness and all possible numeric inputs are not proven.
-- Instance state remains browser-local; cross-device workspace sync and account-based workspace storage are not implemented.
+- Instance edits are retained in the browser. Verified accounts can synchronize workspace snapshots and instance state through the authenticated account API; see [account sync](account-sync.md). Catalog private-definition ownership remains session-scoped and is separate from account snapshot storage.
 - AI requests retain the existing application-wide budget and session cache. Missing provider/DB configuration fails visibly; no fictional fallback catalog is returned.
 - Old embedded workspace exports still load. Catalog retirement preserves immutable historical versions; incompatible changes do not silently upgrade active instances.
 - The legacy API demo classifier remains explicitly limited and deterministic; it is not a substitute for freeform live task understanding.
