@@ -81,3 +81,20 @@
 }
 @media(min-width:701px) and (max-width:1100px){.shell .sidebar{--nav-width:210px}}
 @media(prefers-reduced-motion:reduce){.shell .sidebar,.shell .breadcrumb button[aria-controls=workspace-navigation] svg{transition:none!important}}
+
+/* One continuous surface, from server paint through account restoration. */
+html,body{background:#101113}
+.boot-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(ellipse at 50% 45%,#eda77d09,transparent 45%),#101113;color:#e9e9eb;transition:opacity .6s cubic-bezier(.22,1,.36,1),visibility .6s;isolation:isolate}
+.boot-screen.is-leaving{opacity:0;visibility:hidden;pointer-events:none}
+.boot-emblem{position:relative;width:120px;height:120px;display:grid;place-items:center;transition:transform .6s cubic-bezier(.22,1,.36,1)}
+.boot-emblem i{position:absolute;inset:12px;border:1px solid #eda77d25;border-radius:28px;rotate:32deg;animation:boot-orbit 9s ease-in-out infinite alternate}
+.boot-emblem i:nth-child(2){inset:23px;rotate:16deg;animation-direction:alternate-reverse}
+.boot-emblem i:nth-child(3){inset:2px;rotate:48deg;animation-duration:12s}
+.boot-emblem>span{font-size:54px;color:#eda77d;filter:drop-shadow(0 0 24px #eda77d30)}
+.boot-wordmark{font-size:22px;font-weight:600;letter-spacing:-1px}.boot-wordmark>span{color:#808185;font-weight:400}
+.boot-pulse{display:flex;gap:7px;height:12px;align-items:center}.boot-pulse i{width:4px;height:4px;border-radius:50%;background:#eda77d;animation:boot-breathe 1.5s ease-in-out infinite}.boot-pulse i:nth-child(2){animation-delay:.18s}.boot-pulse i:nth-child(3){animation-delay:.36s}
+.boot-screen.is-leaving .boot-emblem{transform:scale(1.07) translateY(-6px)}
+.boot-error{position:fixed;z-index:1001;bottom:24px;inset-inline:24px;text-align:center;color:#e9e9eb}.boot-error button{padding:10px 18px;border:1px solid #eda77d60;border-radius:10px;background:#161719;color:inherit}
+@keyframes boot-orbit{to{rotate:65deg}}
+@keyframes boot-breathe{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.boot-screen{transition:opacity .12s,visibility .12s}.boot-emblem,.boot-emblem i,.boot-pulse i{animation:none;transition:none}}

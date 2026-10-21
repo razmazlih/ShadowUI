@@ -173,3 +173,16 @@ textarea[dir=auto],input[dir=auto]{text-align:start}
  .home-screen .hero-description{line-height:1.3}
  .home-screen .example-tag{letter-spacing:.4px}
 }
+
+.personal-greeting{margin:0 0 16px;color:var(--text);font-size:clamp(18px,3vw,24px);font-weight:500;line-height:1.5;max-width:100%;overflow-wrap:anywhere;text-align:center}
+.personal-greeting bdi{color:var(--accent);font-weight:600}
+.personal-greeting>span{color:var(--accent);font-size:.75em}
+
+.account-bootstrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:var(--text);background:var(--bg)}
+.account-bootstrap p{margin:0}
+
+/* Keep workspace names and history readable rather than abbreviating them. */
+.breadcrumb{min-width:0}
+.breadcrumb strong,.workspace-history-open bdi,.nav-item{white-space:normal;overflow-wrap:anywhere;text-overflow:clip;overflow:visible}
+.demo-history-item>span{display:block;-webkit-line-clamp:unset;overflow:visible;overflow-wrap:anywhere}
+header:has(.breadcrumb){height:auto;min-height:60px;padding-block:14px}

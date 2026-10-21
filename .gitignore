@@ -18,3 +18,16 @@ ui-debug.log
 .next-*
 
 .DS_Store
+
+# Local browser automation sessions and generated visual artifacts
+.playwright-cli/
+/output/playwright/**/*.png
+/output/playwright/**/*.jpg
+/output/playwright/**/*.jpeg
+/output/playwright/**/*.webp
+/output/playwright/**/*.gif
+/output/playwright/**/*.mp4
+/output/playwright/**/*.webm
+
+# Temporary Next.js build output
+/tmp/

@@ -47,8 +47,11 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const layoutMotionKey=`${workspaceId}:${composition}:${layout.order.join(',')}:${availableWidth}:${density}:${JSON.stringify(layout.sizes)}`;
  useEffect(()=>{
   const element=grid.current;if(!element)return;
+  // Measure the available canvas, not a reading column narrowed by the current layout.
+  const canvas=element.closest<HTMLElement>('.workspace')??element.parentElement!;
   const measure=()=>{
-   setAvailableWidth(Math.round(element.clientWidth));
+   const style=getComputedStyle(canvas);
+   setAvailableWidth(Math.round(canvas.clientWidth-(parseFloat(style.paddingLeft)||0)-(parseFloat(style.paddingRight)||0)));
    const styles=getComputedStyle(element);
    const gap=parseFloat(styles.rowGap)||12;
    const rowHeight=parseFloat(styles.gridAutoRows)||1;
@@ -56,7 +59,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
    element.querySelectorAll<HTMLElement>(':scope > [data-component-id]').forEach(card=>{next[card.dataset.componentId!]=Math.max(1,Math.ceil((card.getBoundingClientRect().height+gap)/(rowHeight+gap)));});
    setRowSpans(previous=>Object.keys(previous).length===Object.keys(next).length&&Object.keys(next).every(id=>previous[id]===next[id])?previous:next);
   };
-  const observer=new ResizeObserver(measure);observer.observe(element);
+  const observer=new ResizeObserver(measure);observer.observe(element);observer.observe(canvas);
   element.querySelectorAll(':scope > [data-component-id]').forEach(card=>observer.observe(card));
   measure();return ()=>observer.disconnect();
  },[workspaceId,composition]);
@@ -168,7 +171,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const pointerHandlers={onPointerMove:update,onPointerUp:(e:PointerEvent<HTMLButtonElement>)=>finish(e),onPointerCancel:(e:PointerEvent<HTMLButtonElement>)=>finish(e,true),onLostPointerCapture:cancel,onKeyDown:(e:React.KeyboardEvent<HTMLButtonElement>)=>{if(e.key==='Escape')cancel();}};
  const byId=new Map(components.map(c=>[c.id,c]));
  return <div className={`workspace-stage${reading?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
-  {components.length>1&&availableWidth>=680&&<div className="layout-toolbar"><details className="layout-settings" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה ועמודות':'Display & columns'}</span><span>{layout.mode==='auto'?(he?'התאמה אוטומטית':'Automatic'):(he?'מותאם אישית':'Custom')}</span></summary><div className="layout-settings-panel">
+  {components.length>0&&availableWidth>=680&&<div className="layout-toolbar"><details className="layout-settings" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה ועמודות':'Display & columns'}</span><span>{layout.mode==='auto'?(he?'התאמה אוטומטית':'Automatic'):(he?'מותאם אישית':'Custom')}</span></summary><div className="layout-settings-panel">
    <div className="layout-panel-heading"><strong>{he?'איך להציג את סביבת העבודה?':'How should this workspace look?'}</strong><button type="button" className="layout-close" aria-label={he?'סגירת הגדרות תצוגה':'Close display settings'} onClick={event=>{const details=event.currentTarget.closest('details');if(details){details.open=false;details.querySelector('summary')?.focus();}}}><X size={16}/></button></div>
    <p className="layout-help">{he?'בחרו פריסה — השינוי מוצג מיד ונשמר לסביבת העבודה הזו.':'Choose an arrangement. Changes appear immediately and are saved for this workspace.'}</p>
    <div className="layout-presets" role="group" aria-label={he?'מספר עמודות':'Column count'}>{(['auto','1','2','3'] as const).filter(value=>value!=='3'||availableWidth>=1050).map(value=><button key={value} type="button" aria-pressed={preset===value} onClick={()=>commit(value==='auto'?automaticLayout(components,availableWidth):columnLayout(components,Number(value) as 1|2|3))}><span className={`layout-preview preview-columns-${value}`} aria-hidden="true">{Array.from({length:value==='auto'?3:Number(value)},(_,index)=><i key={index}/>)}</span><span>{value==='auto'?(he?'אוטומטי':'Automatic'):value==='1'?(he?'עמודה אחת':'One column'):value==='2'?(he?'שתי עמודות':'Two columns'):(he?'שלוש עמודות':'Three columns')}</span></button>)}</div>

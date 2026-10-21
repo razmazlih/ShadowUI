@@ -1,6 +1,6 @@
 'use client';
 import {getApps,initializeApp} from 'firebase/app';
-import {browserLocalPersistence,connectAuthEmulator,createUserWithEmailAndPassword,EmailAuthProvider,getAuth,GoogleAuthProvider,inMemoryPersistence,linkWithCredential,onAuthStateChanged,reload,sendEmailVerification,sendPasswordResetEmail,setPersistence,signInWithEmailAndPassword,signInWithPopup,signOut,type OAuthCredential,type User} from 'firebase/auth';
+import {applyActionCode,browserLocalPersistence,connectAuthEmulator,createUserWithEmailAndPassword,EmailAuthProvider,getAuth,getRedirectResult,GoogleAuthProvider,inMemoryPersistence,linkWithCredential,onAuthStateChanged,reload,sendEmailVerification,sendPasswordResetEmail,setPersistence,updateProfile,signInWithEmailAndPassword,signInWithPopup,signInWithRedirect,signOut,type OAuthCredential,type UserCredential,type User} from 'firebase/auth';
 const config={apiKey:process.env.NEXT_PUBLIC_FIREBASE_API_KEY,authDomain:process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,projectId:process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,appId:process.env.NEXT_PUBLIC_FIREBASE_APP_ID};
 const emulatorHost=process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
 function localEmulatorURL(){
@@ -13,13 +13,23 @@ const modeConfigured=emulatorHost?Boolean(emulatorURL):Boolean(config.projectId&
 export const firebaseClientConfigured=Boolean(modeConfigured&&config.apiKey&&config.authDomain&&config.projectId&&config.appId);
 function auth(){
  if(!firebaseClientConfigured)throw new Error('Firebase Authentication אינו מוגדר כראוי.');
- const app=getApps().find(app=>app.name==='shadowui-catalog-client')??initializeApp(config,'shadowui-catalog-client');
+ const app=getApps().find(app=>app.name==='shadowui-catalog-client')??initializeApp({...config,authDomain:!emulatorURL&&typeof window!=='undefined'?window.location.host:config.authDomain},'shadowui-catalog-client');
  const instance=getAuth(app);if(emulatorURL&&!instance.emulatorConfig)connectAuthEmulator(instance,emulatorURL,{disableWarnings:true});return instance;
 }
 export function observeCatalogUser(callback:(user:User|null)=>void){if(!firebaseClientConfigured){callback(null);return ()=>{};}return onAuthStateChanged(auth(),callback);}
 export async function signInCatalog(){return signInWithPopup(auth(),new GoogleAuthProvider());}
 export async function signOutCatalog(){return signOut(auth());}
 
+let redirectResult:Promise<UserCredential|null>|undefined;
+function rememberGoogleConflict(error:unknown){
+ if((error as {code?:string})?.code!=='auth/account-exists-with-different-credential')return;
+ const credential=GoogleAuthProvider.credentialFromError(error as Parameters<typeof GoogleAuthProvider.credentialFromError>[0]);
+ const email=(error as {customData?:{email?:string}}).customData?.email;
+ if(credential&&email)pendingGoogle={credential,email};
+}
+function finishGoogleRedirect(){
+ return redirectResult??=getRedirectResult(auth()).catch(error=>{rememberGoogleConflict(error);throw error;});
+}
 const accountObservers=new Set<(user:User|null)=>void>();
 let accountOperations=0;
 let pendingGoogle:{email:string;credential:OAuthCredential}|null=null;
@@ -29,12 +39,14 @@ async function accountOperation<T>(operation:()=>Promise<T>):Promise<T>{
  try{await setPersistence(auth(),browserLocalPersistence);auth().languageCode='he';return await operation();}
  finally{accountOperations--;publishAccount();}
 }
-export function observeAccountUser(callback:(user:User|null)=>void,onError?:(error:Error)=>void){
+export function observeAccountUser(callback:(user:User|null)=>void,onError?:(error:Error)=>void,onGoogleRedirect?:()=>void){
  if(!firebaseClientConfigured){callback(null);return ()=>{};}
  try{
   const instance=auth();accountObservers.add(callback);
+  let subscribed=true;
+  void finishGoogleRedirect().then(result=>{if(subscribed&&result?.user.emailVerified)onGoogleRedirect?.();}).catch(error=>{if(subscribed)onError?.(error instanceof Error?error:Object.assign(new Error('Google sign-in failed.'),error));});
   const unsubscribe=onAuthStateChanged(instance,()=>{if(!accountOperations)callback(instance.currentUser);},error=>{onError?.(error);if(!accountOperations)callback(instance.currentUser);});
-  return ()=>{accountObservers.delete(callback);unsubscribe();};
+  return ()=>{subscribed=false;accountObservers.delete(callback);unsubscribe();};
  }catch(error){accountObservers.delete(callback);onError?.(error instanceof Error?error:new Error('לא ניתן לפתוח את שירות ההתחברות.'));callback(null);return ()=>{};}
 }
 export function accountAuthError(error:unknown,locale:'he'|'en'='he'){
@@ -72,6 +84,7 @@ export function accountAuthError(error:unknown,locale:'he'|'en'='he'){
    'Firebase Authentication אינו מוגדר כראוי.':'Firebase Authentication is not configured correctly.',
    'לא ניתן לפתוח את שירות ההתחברות.':'Unable to open the sign-in service.',
    'יש להתחבר תחילה.':'Please sign in first.',
+   'השם חייב להכיל בין 1 ל־80 תווים.':'Your name must contain 1 to 80 characters.',
    'יש להתחבר עם Google ולאמת את האימייל תחילה.':'Sign in with Google and verify your email first.',
    'יש לאמת את האימייל לפני קישור Google.':'Verify your email before linking Google.',
    'בחרו את חשבון Google עם אותו אימייל בדיוק. לא בוצע קישור.':'Choose the Google account with the exact same email address. No account was linked.',
@@ -82,15 +95,9 @@ export function accountAuthError(error:unknown,locale:'he'|'en'='he'){
  return error instanceof Error&&!code?error.message:'הפעולה נכשלה. נסו שוב.';
 }
 export function signInAccountGoogle(){return accountOperation(async()=>{
- try{const result=await signInWithPopup(auth(),new GoogleAuthProvider());pendingGoogle=null;return result;}
- catch(error){
-  if((error as {code?:string}).code==='auth/account-exists-with-different-credential'){
-   const credential=GoogleAuthProvider.credentialFromError(error as Parameters<typeof GoogleAuthProvider.credentialFromError>[0]);
-   const email=(error as {customData?:{email?:string}}).customData?.email;
-   if(credential&&email)pendingGoogle={credential,email};
-  }
-  throw error;
- }
+ pendingGoogle=null;
+ // Full-page navigation works without permission to open popup windows.
+ return signInWithRedirect(auth(),new GoogleAuthProvider());
 });}
 export function signInAccountEmail(email:string,password:string){return accountOperation(async()=>{
  const result=await signInWithEmailAndPassword(auth(),email.trim(),password);
@@ -101,10 +108,10 @@ export function signInAccountEmail(email:string,password:string){return accountO
 });}
 export function registerAccount(email:string,password:string){return accountOperation(async()=>{
  const result=await createUserWithEmailAndPassword(auth(),email.trim(),password);
- await sendEmailVerification(result.user);return result;
+ await sendAccountVerification(result.user);return result;
 });}
 export function resendAccountVerification(){return accountOperation(async()=>{
- const user=auth().currentUser;if(!user)throw new Error('יש להתחבר תחילה.');await sendEmailVerification(user);
+ const user=auth().currentUser;if(!user)throw new Error('יש להתחבר תחילה.');await sendAccountVerification(user);
 });}
 export function refreshAccountVerification(){return accountOperation(async()=>{
  const user=auth().currentUser;if(!user)return null;
@@ -140,3 +147,24 @@ export function linkAccountGoogle(){return accountOperation(async()=>{
  }finally{await signOut(proof);}
 });}
 export function signOutAccount(){return accountOperation(async()=>{await signOut(auth());pendingGoogle=null;});}
+
+async function sendAccountVerification(user:User){
+ const response=await fetch('/api/account/verification',{method:'POST',headers:{Authorization:`Bearer ${await user.getIdToken()}`}});
+ const result=await response.json();
+ if(result.fallback===true&&response.status===503){await sendEmailVerification(user);return;}
+ if(!response.ok)throw new Error(result.error||'לא ניתן לשלוח מייל אימות.');
+}
+const verificationActions=new Map<string,Promise<void>>();
+export function completeAccountVerification(code:string){
+ // Share the operation across React effect replays; action codes are single-use.
+ let action=verificationActions.get(code);
+ if(!action){action=(async()=>{await applyActionCode(auth(),code);try{await refreshAccountVerification();}catch{/* Verification succeeded; a stale local session must not block returning home. */}})();verificationActions.set(code,action);}
+ return action;
+}
+
+export function updateAccountName(name:string){return accountOperation(async()=>{
+ const user=auth().currentUser;if(!user)throw new Error('יש להתחבר תחילה.');
+ const displayName=name.trim();
+ if(!displayName||displayName.length>80)throw new Error('השם חייב להכיל בין 1 ל־80 תווים.');
+ await updateProfile(user,{displayName});
+});}

@@ -12,7 +12,7 @@
 
 /* Open workspace: natural document order, with quiet layout controls. */
 .workspace-stage{display:block;min-width:0;margin-top:16px}
-.lesson-layout .workspace-surface{max-width:1040px;margin-inline:auto}
+.lesson-layout .workspace-surface{width:100%;max-width:1040px;margin-inline:auto}
 .lesson-layout .workspace-surface .r-grid{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto;gap:16px}
 .lesson-layout .workspace-surface .r-card{grid-column:1/-1;grid-row:auto;min-height:0}
 .lesson-layout .workspace-surface .r-card-header{margin-bottom:14px}
@@ -123,3 +123,167 @@
 .layout-toolbar{position:relative;z-index:5}
 .layout-settings{position:static}
 .layout-settings-panel{inset-inline-end:0;width:360px;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+
+/* Shared workspace card language: tactile surfaces, readable controls and quiet detail. */
+.workspace-surface .r-card{--card-accent:var(--accent,#eda77d);--card-tint:color-mix(in srgb,var(--card-accent,#b27f4e) 9%,var(--panel,#fff));--card-muted:color-mix(in srgb,var(--text,#242733) 60%,var(--panel,#fff));border-radius:20px;box-shadow:0 3px 12px #00000004;background:linear-gradient(145deg,var(--card-tint),var(--panel,#fff) 42%);padding:20px 20px 30px}
+.workspace-surface .r-card:focus-within{border-color:color-mix(in srgb,var(--card-accent) 50%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--card-accent) 7%,transparent)}
+.workspace-surface .r-card-header{align-items:center;gap:12px;margin-bottom:20px}
+.workspace-surface .r-card-header h3{font-size:16px;font-weight:650;line-height:1.45}
+.workspace-surface .r-card-mark{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,var(--card-accent) 12%,var(--panel));margin:0}
+.workspace-surface .r-card-mark svg{width:20px;height:20px}
+.workspace-surface .r-card input,.workspace-surface .r-card select,.workspace-surface .r-card textarea{border:1px solid var(--line);background:var(--soft);color:var(--text);border-radius:10px;padding:9px 11px;transition:border-color .16s,background .16s;line-height:1.5}
+.workspace-surface .r-card input::placeholder,.workspace-surface .r-card textarea::placeholder{color:var(--card-muted);opacity:.8}
+.workspace-surface .r-card input:hover,.workspace-surface .r-card textarea:hover,.workspace-surface .r-card select:hover{border-color:color-mix(in srgb,var(--muted) 45%,var(--line))}
+.workspace-surface .r-card button{border-color:var(--line);background:var(--soft);color:var(--text);border-radius:10px;min-height:36px;padding:8px 12px;transition:background .16s,border-color .16s,transform .16s}
+.workspace-surface .r-card button:hover:not(:disabled){background:color-mix(in srgb,var(--card-accent) 12%,var(--soft));border-color:color-mix(in srgb,var(--card-accent) 40%,var(--line))}
+.workspace-surface .r-card button:active:not(:disabled){transform:scale(.97)}
+.workspace-surface .r-card .r-primary{background:var(--card-accent);border-color:var(--card-accent);color:#261b15;font-weight:600}
+.workspace-surface .r-card .r-primary:hover:not(:disabled){background:color-mix(in srgb,var(--card-accent) 85%,white)}
+.workspace-surface .r-card .r-icon{min-width:30px;min-height:30px;color:var(--card-muted)!important;border-radius:8px}
+.workspace-surface .r-muted,.workspace-surface .r-small,.workspace-surface .r-check small,.workspace-surface .r-scale,.workspace-surface .r-criteria label,.workspace-surface .r-criteria output{color:var(--card-muted)}
+.workspace-surface .r-progress{height:6px;background:var(--soft);margin-bottom:10px}
+.workspace-surface .r-progress span{background:var(--card-accent);border-radius:inherit}
+.workspace-surface .r-check{padding:13px 7px;border-color:var(--line);border-radius:8px;transition:background .16s}
+.workspace-surface .r-check:hover{background:var(--soft)}
+.workspace-surface .r-check label{line-height:1.6;align-items:center}
+.workspace-surface .r-check input{width:18px;height:18px;flex-shrink:0;accent-color:var(--card-accent)}
+.workspace-surface .r-check.is-done label>span{color:var(--card-muted)}
+.workspace-surface .r-add{padding-top:4px;gap:8px}
+.workspace-surface .r-add input{border-style:solid;background:var(--soft);min-height:39px}
+.workspace-surface .r-add button{border-style:solid;min-width:39px;color:var(--card-accent)}
+.workspace-surface .r-event{gap:12px;padding-bottom:18px}
+.workspace-surface .r-event:before{border-color:var(--line);inset-inline-start:5px;top:19px}
+.workspace-surface .r-event-dot{width:11px;height:11px;background:var(--card-accent);box-shadow:0 0 0 4px var(--card-tint);margin-top:13px}
+.workspace-surface .r-event>div{gap:6px;align-items:start}
+.workspace-surface .r-event .r-edit-label,.workspace-surface .r-event .r-edit-detail{background:transparent;border-color:transparent;padding:6px;border-radius:7px}
+.workspace-surface .r-event .r-edit-label{font-weight:550}
+.workspace-surface .r-event .r-edit-detail{color:var(--card-muted)}
+.workspace-surface .r-event input[type=date]{width:126px;font-size:11px}
+.workspace-surface .r-card textarea.r-notes{background:var(--soft)!important;border-color:var(--line)!important;min-height:145px;padding:14px;font-size:13px!important;line-height:1.9}
+.workspace-surface .r-lane{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:12px}
+.workspace-surface .r-lane h4,.workspace-surface .r-lane h4 span{color:var(--card-muted)}
+.workspace-surface .r-task{background:var(--panel);border-color:var(--line);border-radius:10px;line-height:1.6}
+.workspace-surface .r-card button.r-flash{background:var(--soft);border-color:var(--line);border-radius:14px;min-height:170px;gap:16px}
+.workspace-surface .r-card button.r-flash.flipped{background:var(--card-tint);border-color:var(--card-accent)}
+.workspace-surface .r-flash small,.workspace-surface .r-flash>span{color:var(--card-muted)}
+.workspace-surface .r-option{padding:11px;border:1px solid var(--line);margin-bottom:7px;border-radius:10px;cursor:pointer;line-height:1.5}
+.workspace-surface .r-option:hover,.workspace-surface .r-option:has(input:checked){background:var(--card-tint);border-color:var(--card-accent)}
+.workspace-surface .r-option input{accent-color:var(--card-accent)}
+.workspace-surface .r-card th{padding:11px 9px;background:var(--soft);color:var(--card-muted);text-transform:none;letter-spacing:0}
+.workspace-surface .r-card td{border-color:var(--line);padding:7px}
+.workspace-surface .r-card td input{background:transparent;border-color:transparent}
+.workspace-surface .r-card tbody tr:hover{background:var(--card-tint)}
+.workspace-surface .r-card tfoot,.workspace-surface .r-ranking strong,.workspace-surface .r-slider output,.workspace-surface .r-card input.r-slider-number{color:var(--card-accent)}
+.workspace-surface .r-timer{padding:10px 0;color:var(--card-muted)}
+.workspace-surface .r-timer>svg{color:var(--card-accent)}
+.workspace-surface .r-timer strong{font-size:clamp(48px,6vw,72px);font-weight:400;color:var(--text);letter-spacing:-3px;margin:14px 0 24px}
+.workspace-surface .r-timer input{width:64px}
+.workspace-surface .r-bar{height:9px;border-radius:20px;background:var(--soft)}
+.workspace-surface .r-bar span{border-radius:inherit;background:var(--card-accent)}
+.workspace-surface .r-compare,.workspace-surface .r-schedule-facts{border-color:var(--line)}
+.workspace-surface .r-reason,.workspace-surface .r-days-off>span{background:var(--card-tint);color:var(--card-muted);border-radius:10px}
+.workspace-surface .r-approval-icon{background:var(--card-tint);color:var(--card-accent)}
+.workspace-surface .r-week-event{background:var(--soft);border-color:var(--line);border-inline-start-color:var(--card-accent)}
+.workspace-surface .r-card .r-week-title{background:var(--panel)!important}
+.workspace-surface .r-resource-link{border-color:var(--line);background:var(--soft)}
+.workspace-surface .r-resource-link:hover{background:var(--card-tint);border-color:var(--card-accent)}
+.workspace-surface .drag-handle,.workspace-surface .resize-handle{min-height:28px;padding:5px;background:transparent}
+.workspace-surface .card-layout-options>summary{width:32px;height:32px;border-radius:9px}
+@media(max-width:740px){.workspace-surface .r-card{padding:17px 17px 22px;border-radius:17px}.workspace-surface .r-card-header{gap:10px;margin-bottom:16px}.workspace-surface .r-card-mark{width:32px;height:32px;border-radius:10px}.workspace-surface .r-event input[type=date]{width:100%}.workspace-surface .r-timer strong{font-size:58px}.workspace-surface .r-card input,.workspace-surface .r-card select,.workspace-surface .r-card textarea{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.workspace-surface .r-card *{transition:none!important}.workspace-surface .r-card button:active:not(:disabled){transform:none}}
+.workspace-surface .r-card-header{height:auto;padding:0;border:0;justify-content:initial}
+.workspace-surface .r-card{padding-top:22px}
+.workspace-surface .r-timer>svg{box-sizing:content-box;padding:10px;background:var(--card-tint);border-radius:50%}
+.layout-compact .workspace-surface .r-card{padding-top:16px}
+@media(max-width:740px){.workspace-surface .r-card{padding-top:18px}}
+
+/* Searchable record tools share the same input and empty-state language. */
+.workspace-surface .r-record-search{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.workspace-surface .r-record-search label{display:flex;align-items:center;gap:8px;flex:1;min-width:min(100%,180px);padding-inline:12px;border:1px solid var(--line);border-radius:11px;background:var(--soft);color:var(--muted)}
+.workspace-surface .r-record-search label:focus-within{border-color:var(--card-accent);outline:2px solid color-mix(in srgb,var(--card-accent) 25%,transparent);outline-offset:2px}
+.workspace-surface .r-record-search input{width:100%;border:0;background:transparent;outline:none;padding-inline:0}
+.workspace-surface .r-record-empty{padding:24px 16px;text-align:center;line-height:1.8;color:var(--muted);border:1px dashed var(--line);border-radius:12px;background:var(--soft)}
+
+/* Each tool has its own working surface, beyond the shared shell. */
+.workspace-surface .tool-notes{--card-accent:#d4a45d;background:var(--panel);border-radius:6px 20px 20px 6px;border-inline-start:4px solid var(--card-accent)}
+.workspace-surface .tool-notes .r-card-mark{background:transparent;border-radius:0;border-bottom:2px solid var(--card-accent)}
+.workspace-surface .tool-notes textarea.r-notes{border:0!important;border-radius:2px;background:repeating-linear-gradient(transparent 0,transparent 31px,color-mix(in srgb,var(--card-accent) 15%,transparent) 31px,color-mix(in srgb,var(--card-accent) 15%,transparent) 32px)!important;background-position:0 10px!important;line-height:32px;padding:10px 12px;min-height:180px;box-shadow:inset 0 1px 0 var(--line)}
+.workspace-surface .tool-checklist{--card-accent:#77ad90;background:var(--panel)}
+.workspace-surface .tool-checklist .r-progress{height:9px;border-radius:20px;margin-bottom:8px}
+.workspace-surface .tool-checklist .r-check{margin-top:8px;padding:13px 11px;background:color-mix(in srgb,var(--card-accent) 5%,var(--panel));border:1px solid var(--line);border-radius:12px}
+.workspace-surface .tool-checklist .r-check.is-done{background:color-mix(in srgb,var(--card-accent) 12%,var(--panel));border-color:color-mix(in srgb,var(--card-accent) 35%,var(--line))}
+.workspace-surface .tool-checklist .r-check input{width:20px;height:20px}
+.workspace-surface .tool-timeline{--card-accent:#bd98df;background:var(--panel)}
+.workspace-surface .tool-timeline .r-event{padding-bottom:24px;gap:15px}
+.workspace-surface .tool-timeline .r-event:before{border-inline-start:2px dashed color-mix(in srgb,var(--card-accent) 35%,var(--line));inset-inline-start:6px}
+.workspace-surface .tool-timeline .r-event-dot{width:14px;height:14px;border:3px solid var(--panel);outline:2px solid var(--card-accent);box-shadow:none;margin-top:12px}
+.workspace-surface .tool-timeline .r-event>div{background:color-mix(in srgb,var(--card-accent) 5%,var(--panel));border:1px solid var(--line);border-radius:12px;padding:7px 10px}
+.workspace-surface .tool-timeline .r-event input[type=date]{background:color-mix(in srgb,var(--card-accent) 14%,var(--panel));border:0;border-radius:20px;text-align:center;color:var(--text)}
+.workspace-surface .tool-flashcards{--card-accent:#aa9bed;background:var(--panel)}
+.workspace-surface .tool-flashcards .r-flashcards{gap:16px;padding:3px 3px 6px}
+.workspace-surface .tool-flashcards button.r-flash{position:relative;isolation:isolate;min-height:205px;border-radius:18px;background:linear-gradient(155deg,color-mix(in srgb,var(--card-accent) 22%,var(--panel)),var(--panel));border-color:color-mix(in srgb,var(--card-accent) 35%,var(--line));box-shadow:0 4px 0 color-mix(in srgb,var(--card-accent) 14%,var(--panel)),0 7px 0 var(--line);padding:20px;gap:22px}
+.workspace-surface .tool-flashcards button.r-flash strong{font-size:19px;font-weight:600;line-height:1.65}
+.workspace-surface .tool-flashcards button.r-flash small{align-self:flex-start;letter-spacing:1.6px;font-size:10px;color:var(--card-accent)}
+.workspace-surface .tool-flashcards button.r-flash.flipped{--card-accent:#79b3a5;background:linear-gradient(155deg,color-mix(in srgb,var(--card-accent) 25%,var(--panel)),var(--panel));border-color:var(--card-accent)}
+.workspace-surface .tool-quiz{--card-accent:#7eafe2;background:var(--panel)}
+.workspace-surface .tool-quiz .r-quiz{counter-reset:practice}
+.workspace-surface .tool-quiz fieldset{counter-increment:practice;margin:0 0 22px;padding:17px 0 0;border-top:1px solid var(--line)}
+.workspace-surface .tool-quiz legend{float:inline-start;width:100%;font-size:15px;font-weight:600;margin-bottom:16px;line-height:1.7}
+.workspace-surface .tool-quiz legend:before{content:counter(practice,decimal-leading-zero);display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--card-accent) 13%,var(--panel));color:var(--card-accent);border-radius:7px;width:30px;height:30px;margin-inline-end:10px;font-size:13px}
+.workspace-surface .tool-quiz .r-option{clear:both;border-radius:4px 12px 12px 4px;border-inline-start:3px solid var(--line);padding:12px}
+.workspace-surface .tool-quiz .r-option:has(input:checked){border-inline-start-color:var(--card-accent)}
+.workspace-surface .tool-chart{--card-accent:#e0b35c;background:radial-gradient(ellipse at top right,color-mix(in srgb,var(--card-accent) 10%,transparent),transparent 70%),var(--panel)}
+.workspace-surface .tool-chart .r-bar-row{position:relative;margin-bottom:23px;padding-bottom:3px}
+.workspace-surface .tool-chart .r-bar-row label{font-size:13px;font-weight:600}
+.workspace-surface .tool-chart .r-bar-row input{font-size:20px;font-variant-numeric:tabular-nums;width:85px;border:0;background:transparent;text-align:end;font-weight:650;color:var(--card-accent)}
+.workspace-surface .tool-chart .r-bar{height:18px;background:repeating-linear-gradient(90deg,var(--soft) 0,var(--soft) calc(25% - 1px),var(--line) calc(25% - 1px),var(--line) 25%);border-radius:5px;margin-top:9px}
+.workspace-surface .tool-chart .r-bar span{border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--card-accent) 60%,var(--panel)),var(--card-accent))}
+.workspace-surface .tool-chart .r-bar-row:nth-child(2n){--card-accent:#7eb5ab}
+.workspace-surface .tool-chart .r-bar-row:nth-child(3n){--card-accent:#b09bd5}
+.workspace-surface .tool-comparison{--card-accent:#d19bb6;background:var(--panel)}
+.workspace-surface .tool-comparison .r-criteria{background:var(--soft);border-radius:14px;padding:15px;gap:18px}
+.workspace-surface .tool-comparison .r-ranking{counter-reset:ranking;gap:8px}
+.workspace-surface .tool-comparison .r-ranking>div{counter-increment:ranking;padding:12px;background:var(--soft);border-radius:10px;border:1px solid transparent;position:relative}
+
+.workspace-surface .tool-comparison .r-ranking>div:first-child{border-color:color-mix(in srgb,var(--card-accent) 40%,var(--line));background:var(--card-tint)}
+
+.workspace-surface .tool-table{--card-accent:#82b4b9;background:var(--panel);border-radius:12px}
+.workspace-surface .tool-table .r-table-wrap{border:1px solid var(--line);border-radius:10px}
+.workspace-surface .tool-table tbody tr:nth-child(even){background:color-mix(in srgb,var(--soft) 55%,transparent)}
+.workspace-surface .tool-links{--card-accent:#85abc9;background:var(--panel)}
+.workspace-surface .tool-links .r-resource-link{border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:15px 6px}
+.workspace-surface .tool-links .r-resource-link svg{background:var(--soft);border-radius:50%;box-sizing:content-box;padding:9px;color:var(--card-accent)}
+.workspace-surface .tool-kanban{--card-accent:#d39c72;background:var(--panel)}
+.workspace-surface .tool-kanban .r-lane{border:0;border-radius:12px;border-top:3px solid var(--card-accent)}
+.workspace-surface .tool-kanban .r-lane:nth-child(2){border-top-color:#9ca5d6}
+.workspace-surface .tool-kanban .r-lane:nth-child(3){border-top-color:#80b49b}
+.workspace-surface .tool-slider{--card-accent:#d7a970;background:var(--panel)}
+.workspace-surface .tool-slider .r-slider{padding:18px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(ellipse at bottom,color-mix(in srgb,var(--card-accent) 9%,var(--panel)),var(--panel))}
+.workspace-surface .tool-slider input.r-slider-number{font-size:36px;font-weight:600}
+.workspace-surface .tool-approval{--card-accent:#80b49b;background:var(--panel);border-top:3px solid var(--card-accent)}
+.workspace-surface .tool-approval .r-approval-icon{width:62px;height:62px;border:1px solid color-mix(in srgb,var(--card-accent) 35%,var(--line));border-radius:20px}
+.workspace-surface .tool-calendar,.workspace-surface .tool-weekly_schedule{--card-accent:#89a9d0;background:var(--panel)}
+.workspace-surface .tool-weekly_schedule .r-week-day>header{border-bottom:2px solid color-mix(in srgb,var(--card-accent) 40%,var(--line));padding-bottom:12px}
+@media(max-width:400px){.workspace-surface .tool-chart .r-bar-row input{font-size:17px;width:70px}.workspace-surface .tool-flashcards button.r-flash{min-height:180px}.workspace-surface .tool-timeline .r-event>div{padding:6px}.workspace-surface .tool-comparison .r-ranking>div{padding-inline-start:30px}}
+
+.workspace-surface .tool-quiz .r-quiz legend>span{display:none}
+
+/* Card colors are local to tool content; site navigation and layout controls retain brand orange. */
+.workspace-surface .r-card input:focus,.workspace-surface .r-card textarea:focus,.workspace-surface .r-card select:focus,.workspace-surface .r-card-content button:focus-visible{outline-color:var(--card-accent)}
+
+/* Text content must remain readable at every card width. */
+.r-card{overflow-wrap:anywhere}
+.r-card :where(h2,h3,h4,p,span,strong,small,label,legend,td,th,a,button){overflow-wrap:anywhere;white-space:normal}
+.r-card :where(.r-card-heading,.r-card-header>div,.r-check label>span,.r-resource-link>span){min-width:0}
+.r-card textarea.r-auto-text{display:block;box-sizing:border-box;width:100%;min-width:0;min-height:0;max-height:none;resize:none;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;font:inherit;line-height:1.6}
+.r-card .r-add .r-auto-text{flex:1;width:0}
+.r-card td .r-auto-text{background:transparent;border-color:transparent}
+.r-event .r-edit-detail{grid-column:1/-1}
+.workspace-surface .r-event>div{grid-template-columns:minmax(0,1fr);width:100%}
+.workspace-surface .r-event input[type=date]{max-width:100%;width:100%}
+.r-card-header{flex-wrap:wrap;height:auto}
+.r-card-header h3{white-space:normal;overflow:visible;text-overflow:clip}
+.r-card .r-quiz fieldset>.r-auto-text{width:100%;margin-block:8px}
+.r-card textarea.r-notes{min-height:180px}
+.r-card .r-resource-link{min-width:0}
+.r-card .r-resource-link>svg,.r-card .r-check input[type=checkbox]{flex-shrink:0}
