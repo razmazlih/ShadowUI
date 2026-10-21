@@ -7,6 +7,7 @@ import {reconcileSnapshots} from '@/lib/workspace-sync';
 
 export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:WorkspaceSnapshot)=>void,busy:boolean){
  const [ready,setReady]=useState(false),[owner,setOwner]=useState<string|null>(null),[status,setStatus]=useState('טוען שיחות…');
+ const [initialSync,setInitialSync]=useState(false);
  const live=useRef(snapshot),apply=useRef(load),identity=useRef<User|null>(null),initialized=useRef(false),scope=useRef<string|null>(null),base=useRef(parseWorkspaceSnapshot(null)),pending=useRef<User|null|undefined>(undefined),working=useRef(false),blocked=useRef(busy),epoch=useRef(0);
  live.current=snapshot;apply.current=load;blocked.current=busy;
  const changeUser=useCallback((user:User|null)=>{
@@ -14,7 +15,7 @@ export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:Work
   const uid=user?.emailVerified?user.uid:null;
   identity.current=user;
   if(initialized.current&&scope.current===uid)return;
-  epoch.current++;setReady(false);
+  epoch.current++;setReady(false);setInitialSync(Boolean(uid));
   try{
    if(initialized.current)writeAccountWorkspaces(localStorage,scope.current,{...live.current,deviceData:snapshotDeviceData(localStorage,live.current.workspaces)},base.current);
    if(uid){const guest=readAccountWorkspaces(localStorage,null);writeAccountWorkspaces(localStorage,null,{...guest,deviceData:{...guest.deviceData,...snapshotDeviceData(localStorage,guest.workspaces,null)}});}
@@ -66,12 +67,12 @@ export function useAccountWorkspaces(snapshot:WorkspaceSnapshot,load:(value:Work
     }
     throw new Error('conflict');
    }catch{if(valid())setStatus('הסנכרון לא הושלם · השיחות נשמרות במכשיר וננסה שוב');}
-   finally{working.current=false;}
+   finally{working.current=false;if(valid())setInitialSync(false);}
   };
-  const timer=setTimeout(()=>void synchronize(),800);
+  const timer=setTimeout(()=>void synchronize(),initialSync?0:800);
   const interval=setInterval(()=>{if(document.visibilityState==='visible')void synchronize();},15000);
   const refresh=()=>void synchronize();window.addEventListener('online',refresh);window.addEventListener('focus',refresh);
   return()=>{disposed=true;clearTimeout(timer);clearInterval(interval);window.removeEventListener('online',refresh);window.removeEventListener('focus',refresh);};
- },[owner,ready,snapshot]);
- return {ready,owner,status,onUser:changeUser};
+ },[owner,ready,snapshot,initialSync]);
+ return {ready:ready&&!initialSync,owner,status,onUser:changeUser};
 }
