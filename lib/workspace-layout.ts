@@ -10,6 +10,66 @@ const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const safeId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100 && !forbiddenKeys.has(id);
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 
+export type ViewportLayout = {
+  columns: number;
+  groups: Array<{
+    ids: string[];
+    placements: Record<string, { column: number; row: number; span: number }>;
+    rows: number;
+  }>;
+};
+
+/** One-based CSS grid positions, packed in reading order without inspecting editable content.
+ * Dimensions describe the card area after the toolbar and tool selector are reserved.
+ * Undersized viewports still expose one card; the renderer supplies accessible scrolling.
+ */
+export function viewportLayout(components: UIComponent[], order: string[], width: number, height: number): ViewportLayout {
+  const availableWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
+  const availableHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
+  const mobile = availableWidth < 680;
+  const columns = mobile ? 1 : Math.max(1, Math.floor((availableWidth + 12) / (280 + 12)));
+  const capacityRows = mobile ? 1 : Math.max(1, Math.floor((availableHeight + 12) / (220 + 12)));
+  const byId = new Map(components.map(component => [component.id, component]));
+  const ids = [...new Set([...order.filter(id => byId.has(id)), ...components.map(component => component.id)])];
+  const groups: ViewportLayout['groups'] = [];
+  const wideTypes = new Set(['table', 'calendar', 'weekly_schedule', 'kanban', 'comparison']);
+  const expandableTypes = new Set([...wideTypes, 'notes', 'timeline']);
+  let group: ViewportLayout['groups'][number] | undefined;
+  let column = 1;
+  let row = 1;
+  const closeRow = () => {
+    if (!group || column > columns) return;
+    const rowIds = group.ids.filter(id => group!.placements[id].row === row);
+    const expandable = rowIds.findLastIndex(id => expandableTypes.has(byId.get(id)!.type));
+    if (expandable < 0) return;
+    const spare = columns - column + 1;
+    group.placements[rowIds[expandable]].span += spare;
+    // Give reading content the free space while keeping following controls compact.
+    for (const id of rowIds.slice(expandable + 1)) group.placements[id].column += spare;
+  };
+  for (const id of ids) {
+    const component = byId.get(id)!;
+    const fullRow = component.type === 'timeline' && component.span === 'wide';
+    const wide = wideTypes.has(component.type) || (component.type === 'notes' && component.span === 'wide');
+    const span = fullRow ? columns : Math.min(columns, wide ? 2 : 1);
+    if (column + span - 1 > columns) { closeRow(); column = 1; row += 1; }
+    if (!group || row > capacityRows) {
+      group = { ids: [], placements: Object.create(null), rows: 0 };
+      groups.push(group);
+      column = 1;
+      row = 1;
+    }
+    group.ids.push(id);
+    group.placements[id] = { column, row, span };
+    group.rows = row;
+    column += span;
+  }
+  closeRow();
+  // A solitary card is the current main tool rather than a narrow dashboard tile.
+  for (const packed of groups) if (packed.ids.length === 1) packed.placements[packed.ids[0]].span = columns;
+  return { columns, groups };
+}
+
 /** Reading and practice form a lesson, rather than independent dashboard panels. */
 export function isLessonLayout(components: UIComponent[]): boolean {
   return components.some(component => component.type === 'notes')

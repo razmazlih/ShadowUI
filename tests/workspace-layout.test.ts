@@ -1,9 +1,122 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { UIComponent } from '../lib/schema';
-import { automaticLayout, columnLayout, parseLayout, reconcileLayout } from '../lib/workspace-layout';
+import { automaticLayout, columnLayout, parseLayout, reconcileLayout, viewportLayout } from '../lib/workspace-layout';
 
 const component = (id: string, type: UIComponent['type'] = 'chart'): UIComponent => ({ id, type, title: id, reason: '', span: 'normal', items: [] });
+
+test('viewport packing obeys exact width and height capacity boundaries', () => {
+  const components = Array.from({ length: 16 }, (_, index) => component(String(index)));
+  const order = components.map(item => item.id);
+  assert.deepEqual(viewportLayout(components, order, 863, 451).groups.map(group => group.ids.length), Array(8).fill(2));
+  const layout = viewportLayout(components, order, 864, 452);
+  assert.equal(layout.columns, 3);
+  assert.deepEqual(layout.groups.map(group => group.ids.length), [6, 6, 4]);
+  assert.deepEqual(layout.groups.flatMap(group => group.ids), order);
+  assert.deepEqual(layout.groups[0].placements['5'], { column: 3, row: 2, span: 1 });
+  assert.deepEqual(layout.groups.map(group => group.rows), [2, 2, 2]);
+});
+
+test('wide tools receive two columns without moving tools ahead of their reading order', () => {
+  const components = [component('a'), component('table', 'table'), component('b'), component('week', 'weekly_schedule')];
+  const layout = viewportLayout(components, components.map(item => item.id), 864, 452);
+  assert.deepEqual(layout.groups.map(group => group.ids), [['a', 'table', 'b', 'week']]);
+  assert.deepEqual(layout.groups[0].placements.table, { column: 2, row: 1, span: 2 });
+  assert.deepEqual(layout.groups[0].placements.week, { column: 2, row: 2, span: 2 });
+  const narrow = viewportLayout(components, components.map(item => item.id), 680, 220);
+  assert.deepEqual(narrow.groups.map(group => group.ids), [['a'], ['table'], ['b'], ['week']]);
+});
+
+test('five lesson tools fit three readable rows and wide timeline fills its own row', () => {
+  const components = [component('intro', 'notes'), component('example', 'notes'), { ...component('path', 'timeline'), span: 'wide' as const }, component('quiz', 'quiz'), component('practice', 'checklist')];
+  const order = components.map(item => item.id);
+  const layout = viewportLayout(components, order, 900, 700);
+  assert.equal(layout.groups.length, 1);
+  assert.equal(layout.groups[0].rows, 3);
+  assert.deepEqual(layout.groups[0].ids, order);
+  assert.deepEqual(layout.groups[0].placements.example, { column: 2, row: 1, span: 2 });
+  assert.deepEqual(layout.groups[0].placements.path, { column: 1, row: 2, span: 3 });
+  assert.deepEqual(layout.groups[0].placements.quiz, { column: 1, row: 3, span: 1 });
+  assert.ok(viewportLayout(components, order, 900, 452).groups.length > layout.groups.length);
+});
+
+test('reading tools fill spare row width while short controls stay compact', () => {
+  const components = [component('timer', 'timer'), component('notes', 'notes'), { ...component('path', 'timeline'), span: 'wide' as const }, component('slider', 'slider'), component('approval', 'approval')];
+  const layout = viewportLayout(components, components.map(item => item.id), 900, 700);
+  assert.deepEqual(layout.groups[0].placements.notes, { column: 2, row: 1, span: 2 });
+  assert.equal(layout.groups[0].placements.timer.span, 1);
+  assert.equal(layout.groups[0].placements.slider.span, 1);
+  assert.equal(layout.groups[0].placements.approval.span, 1);
+  assert.equal(viewportLayout([component('timer', 'timer')], ['timer'], 900, 700).groups[0].placements.timer.span, 3);
+  const wideNotes = viewportLayout([{ ...component('notes', 'notes'), span: 'wide' }, component('timer', 'timer')], ['notes', 'timer'], 900, 220);
+  assert.equal(wideNotes.groups[0].placements.notes.span, 2);
+  assert.equal(wideNotes.groups[0].placements.timer.column, 3);
+});
+
+test('spare width expands reading tools before trailing controls without changing their order', () => {
+  const components = [component('notes', 'notes'), component('timer', 'timer'), { ...component('wide', 'timeline'), span: 'wide' as const }, component('timeline', 'timeline'), component('slider', 'slider')];
+  const layout = viewportLayout(components, components.map(item => item.id), 900, 700);
+  assert.deepEqual(layout.groups[0].ids, components.map(item => item.id));
+  assert.deepEqual(layout.groups[0].placements.notes, { column: 1, row: 1, span: 2 });
+  assert.deepEqual(layout.groups[0].placements.timer, { column: 3, row: 1, span: 1 });
+  assert.deepEqual(layout.groups[0].placements.timeline, { column: 1, row: 3, span: 2 });
+  assert.deepEqual(layout.groups[0].placements.slider, { column: 3, row: 3, span: 1 });
+  const controls = [component('a', 'timer'), component('b', 'slider')];
+  const compact = viewportLayout(controls, ['a', 'b'], 900, 700);
+  assert.deepEqual(compact.groups[0].placements.a, { column: 1, row: 1, span: 1 });
+  assert.deepEqual(compact.groups[0].placements.b, { column: 2, row: 1, span: 1 });
+});
+
+test('mobile shows one tool regardless of available height and reconciles changed composition', () => {
+  const components = [component('a'), component('new', 'table'), component('b')];
+  const layout = viewportLayout(components, ['b', 'removed', 'b', 'a'], 679, 2000);
+  assert.equal(layout.columns, 1);
+  assert.deepEqual(layout.groups.map(group => group.ids), [['b'], ['a'], ['new']]);
+  for (const group of layout.groups) {
+    assert.equal(group.rows, 1);
+    assert.deepEqual(group.placements[group.ids[0]], { column: 1, row: 1, span: 1 });
+  }
+});
+
+test('viewport geometry ignores edited values and leaves inputs unchanged', () => {
+  const components = [component('notes', 'notes'), component('timer', 'timer'), component('table', 'table')];
+  const order = ['table', 'notes', 'timer'];
+  const before = JSON.stringify({ components, order });
+  const layout = viewportLayout(components, order, 1156, 452);
+  assert.deepEqual(viewportLayout(components.map(item => ({ ...item, text: 'edited'.repeat(500), value: 90, items: [{ id: 'x', label: 'Edited' }] })), order, 1156, 452), layout);
+  assert.equal(JSON.stringify({ components, order }), before);
+});
+
+test('viewport packing has no overlaps and never loses tools across screen sizes', () => {
+  const components = Array.from({ length: 16 }, (_, index) => component(String(index), index % 3 === 0 ? 'table' : 'timer'));
+  const order = components.map(item => item.id).reverse();
+  for (const [width, height] of [[320, 200], [680, 220], [864, 452], [1366, 684], [1600, 916]]) {
+    const layout = viewportLayout(components, order, width, height);
+    assert.deepEqual(layout.groups.flatMap(group => group.ids), order);
+    for (const group of layout.groups) {
+      const occupied = new Set<string>();
+      for (const id of group.ids) {
+        const placement = group.placements[id];
+        assert.ok(placement.column + placement.span - 1 <= layout.columns);
+        assert.ok(placement.row * 220 + (placement.row - 1) * 12 <= height || height < 220);
+        for (let column = placement.column; column < placement.column + placement.span; column++) {
+          const cell = `${placement.row}:${column}`;
+          assert.equal(occupied.has(cell), false);
+          occupied.add(cell);
+        }
+      }
+    }
+  }
+});
+
+test('empty and transient unavailable viewport dimensions remain well-defined', () => {
+  assert.deepEqual(viewportLayout([], [], 0, 0), { columns: 1, groups: [] });
+  for (const dimension of [0, -20, NaN, Infinity]) {
+    const layout = viewportLayout([component('table', 'table')], ['table'], dimension, dimension);
+    assert.equal(layout.columns, 1);
+    assert.deepEqual(layout.groups[0].placements.table, { column: 1, row: 1, span: 1 });
+  }
+});
 
 for (const count of [1, 2, 6, 16]) {
   test(`automatic layout keeps all ${count} components in reading order`, () => {

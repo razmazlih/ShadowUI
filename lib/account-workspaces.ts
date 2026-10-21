@@ -17,8 +17,10 @@ export function parseWorkspaceSnapshot(value:unknown):WorkspaceSnapshot{
  if(raw.deviceData&&typeof raw.deviceData==='object'&&!Array.isArray(raw.deviceData))for(const [key,entry] of Object.entries(raw.deviceData)){
   const suffix=key.startsWith('shadowui.browser-schedule.v1.')?key.slice('shadowui.browser-schedule.v1.'.length):key.startsWith('shadowui.layout.v1:')?key.slice('shadowui.layout.v1:'.length):null;
   if(suffix===null||!safe(suffix)||typeof entry!=='string'||entry.length>300000)continue;
+  const presentation=key.startsWith('shadowui.layout.v1:')&&key.endsWith(':presentation');
+  if(presentation&&!['fit','vertical'].includes(entry))continue;
   const bytes=new TextEncoder().encode(key+entry).byteLength;if(deviceBytes+bytes>300000)continue;
-  try{if(!(key.startsWith('shadowui.layout.v1:')&&key.endsWith(':density')&&['compact','comfortable'].includes(entry)))JSON.parse(entry);deviceData[key]=entry;deviceBytes+=bytes;}catch{}
+  try{if(!presentation&&!(key.startsWith('shadowui.layout.v1:')&&key.endsWith(':density')&&['compact','comfortable'].includes(entry)))JSON.parse(entry);deviceData[key]=entry;deviceBytes+=bytes;}catch{}
  }
  const undoWorkspaces:Record<string,Workspace>=Object.create(null),sources:Record<string,string>=Object.create(null);
  if(raw.undoWorkspaces&&typeof raw.undoWorkspaces==='object')for(const [id,candidate] of Object.entries(raw.undoWorkspaces)){const parsed=WorkspaceSchema.safeParse(candidate);if(ids.has(id)&&parsed.success&&parsed.data.id===id)undoWorkspaces[id]=parsed.data;}
@@ -67,8 +69,8 @@ export function migrateGuestToAccount(storage:WorkspaceStorage,uid:string):Works
    const prefix='shadowui.layout.v1:',schedulePrefix='shadowui.browser-schedule.v1.';
    let mapped=key,nextValue=value;
    if(key.startsWith(prefix)){
-    const original=key.slice(prefix.length),density=original.endsWith(':density'),workspaceId=density?original.slice(0,-8):original;
-    mapped=prefix+(idMap.get(workspaceId)??workspaceId)+(density?':density':'');
+    const original=key.slice(prefix.length),suffix=original.endsWith(':density')?':density':original.endsWith(':presentation')?':presentation':'',workspaceId=suffix?original.slice(0,-suffix.length):original;
+    mapped=prefix+(idMap.get(workspaceId)??workspaceId)+suffix;
    }else if(key.startsWith(schedulePrefix)){
     const original=key.slice(schedulePrefix.length),domainId=domainMap.get(original);
     if(domainId&&domainId!==original){

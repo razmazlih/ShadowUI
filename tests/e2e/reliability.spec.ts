@@ -48,5 +48,8 @@ test('hero stays usable on a narrow viewport and in RTL direction',async({page})
  await page.getByLabel('Availability date').fill(shift.date);await page.getByRole('button',{name:'Mark unavailable',exact:true}).click();
  await expect(page.locator('.sx-experience')).toHaveAttribute('data-interaction-model','resolution');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await expect(page.locator('.sx-alternative button').first()).toBeInViewport();
+ // The schedule owns its scroll area in the bounded workspace.
+ const alternative=page.locator('.sx-alternative button').first();
+ await alternative.scrollIntoViewIfNeeded();
+ await expect(alternative).toBeInViewport();
 });
