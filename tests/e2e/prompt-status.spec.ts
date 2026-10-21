@@ -118,8 +118,9 @@ test('response notices and errors belong only to their conversation',async({page
  await expect.poll(()=>deferredStarted).toBe(true);
  await select('Beta');
  await expect(feedback).toContainText('Request failed');
- finishDeferred();
  await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();
+ finishDeferred();
+ await expect(page.getByRole('button',{name:'Build workspace'})).toBeEnabled();
  await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
  await expect(feedback).toContainText('Request failed');
  await expect(feedback).not.toContainText('Deferred Alpha');
