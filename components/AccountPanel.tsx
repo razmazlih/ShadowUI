@@ -3,11 +3,25 @@ import {useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {AnimatePresence,LayoutGroup,motion,useIsPresent,useReducedMotion} from 'motion/react';
 import type {User} from 'firebase/auth';
 import {useRouter} from 'next/navigation';
-import {KeyRound,LogIn,UserPlus} from 'lucide-react';
-import {accountAuthError,addAccountPassword,firebaseClientConfigured,linkAccountGoogle,observeAccountUser,refreshAccountVerification,registerAccount,resendAccountVerification,resetAccountPassword,signInAccountEmail,signInAccountGoogle,signOutAccount} from '@/lib/firebase-client';
+import {Check,KeyRound,LogIn,LogOut,ShieldCheck,UserPlus,X} from 'lucide-react';
+import {updateAccountName,accountAuthError,addAccountPassword,firebaseClientConfigured,linkAccountGoogle,observeAccountUser,refreshAccountVerification,registerAccount,resendAccountVerification,resetAccountPassword,signInAccountEmail,signInAccountGoogle,signOutAccount} from '@/lib/firebase-client';
 import styles from './AccountPanel.module.css';
+import {safeAuthReturnTo,rememberAuthReturn} from '@/lib/auth-return';
 
 const english:Record<string,string>={
+ "נשמר": "Saved",
+ "שמירה": "Save",
+ "סגירת הודעה": "Dismiss notification",
+ "פרטי החשבון": "Account details",
+ "שיטות התחברות": "Sign-in methods",
+ "מחובר": "Connected",
+ "אימייל מאומת": "Verified email",
+ "קישור": "Connect",
+ "השם שלכם": "Your name",
+ "כך נקבל את פניכם בדף הראשי.": "This is how we will greet you on the home page.",
+ "שמירת השם": "Save name",
+ "השם נשמר ויופיע בדף הראשי.": "Your name is saved and will appear on the home page.",
+ "כאן מעדכנים את השם ומנהלים את ההתחברות לחשבון.": "Update your name and manage how you sign in here.",
  "חשבון ושמירת שיחות": "Account and saved conversations",
  "בחירת כניסה או הרשמה": "Choose sign in or sign up",
  "כניסה לחשבון": "Sign in",
@@ -71,10 +85,13 @@ function AccountStep({children,direction,reducedMotion,view}:{children:ReactNode
  };
  return <motion.div className={styles.step} data-auth-mode={view} inert={!present} aria-hidden={!present||undefined} custom={direction} variants={variants} initial={false} animate="visible" exit="exit" style={{transformPerspective:700,transformStyle:'preserve-3d'}}>{children}</motion.div>;
 }
-export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:{locale?:'he'|'en';onUser?:(user:User|null)=>void;disabled?:boolean}){
+export default function AccountPanel({onUser=()=>{},disabled=false,locale='he',returnTo='/',initialMode='login'}:{locale?:'he'|'en';onUser?:(user:User|null)=>void;disabled?:boolean;returnTo?:string;initialMode?:'login'|'register'}){
  const t=(text:string)=>locale==='en'?(english[text]??text):text;
- const [user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(firebaseClientConfigured),[mode,setMode]=useState<AuthMode>('login'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[working,setWorking]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const [user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(firebaseClientConfigured),[mode,setMode]=useState<AuthMode>(initialMode),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[working,setWorking]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const [name,setName]=useState('');
+ const profileIdentity=useRef('');
  const router=useRouter();
+ const returnTarget=useRef(safeAuthReturnTo(returnTo));returnTarget.current=safeAuthReturnTo(returnTo);
  const completingSignIn=useRef(false);
  const callback=useRef(onUser);callback.current=onUser;
  const localeRef=useRef(locale);localeRef.current=locale;
@@ -85,7 +102,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
  const [contentHeight,setContentHeight]=useState<number>();
  useEffect(()=>{const element=content.current;if(!element)return;const observer=new ResizeObserver(()=>setContentHeight(element.offsetHeight));observer.observe(element);return()=>observer.disconnect();},[]);
  const reducedMotion=Boolean(useReducedMotion());
- useEffect(()=>observeAccountUser(next=>{setUser(next);setLoading(false);callback.current(next);if(completingSignIn.current&&next?.emailVerified)router.replace('/');},failure=>{setError(accountAuthError(failure,localeRef.current));setLoading(false);}),[]);
+ useEffect(()=>observeAccountUser(next=>{setUser(next);const identity=JSON.stringify([next?.uid,next?.displayName]);if(profileIdentity.current!==identity){profileIdentity.current=identity;setName(next?.displayName??'');}setLoading(false);callback.current(next);if(completingSignIn.current&&next?.emailVerified)router.replace(returnTarget.current);},failure=>{setError(accountAuthError(failure,localeRef.current));setLoading(false);},()=>router.replace(returnTarget.current)),[]);
  // Verify automatically when returning from the email link, including another tab.
  useEffect(()=>{
   if(!user||user.emailVerified)return;
@@ -93,7 +110,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
   async function check(){
    if(document.visibilityState!=='visible'||pending)return;
    pending=true;
-   try{const next=await refreshAccountVerification();if(!cancelled&&next?.emailVerified)router.replace('/');}
+   try{const next=await refreshAccountVerification();if(!cancelled&&next?.emailVerified)router.replace(returnTarget.current);}
    catch{/* Keep the explicit refresh and resend controls available on failure. */}
    finally{pending=false;}
   }
@@ -104,6 +121,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
  },[user?.uid,user?.emailVerified,router]);
  async function signIn(operation:()=>Promise<unknown>){
   completingSignIn.current=true;
+  try{if(returnTarget.current!=='/')rememberAuthReturn(sessionStorage,returnTarget.current);}catch{/* The return URL remains available without session storage. */}
   try{return await operation();}finally{completingSignIn.current=false;}
  }
  const locked=working||disabled||loading;
@@ -132,21 +150,30 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
     <AnimatePresence mode="wait" initial={false} custom={direction}>
      <AccountStep key={screen} view={screen} direction={direction} reducedMotion={reducedMotion}>
       {screen==='guest'?<><h1 className={styles.heading}>{t("ממשיכים כאורח.")}</h1><p role="status">{t("השיחות נשמרות כאורח במכשיר זה. התחברות לחשבון תהיה זמינה לאחר הגדרת Firebase באתר.")}</p></>:user?<>
-       <div className={styles.intro}><span className={styles.kicker}>{user.emailVerified?t("החשבון שלכם"):t("עוד צעד אחד")}</span><h1 className={styles.heading}>{user.emailVerified?t("הכול במקום אחד."):t("אמתו את האימייל.")}</h1><p>{user.emailVerified?t("כאן מנהלים את שיטות ההתחברות לאותו חשבון."):t("פתחו את קישור האימות שנשלח אליכם. כשתחזרו לכאן, נמשיך אוטומטית.")}</p></div>
-       <p className={styles.identity} dir="auto">{user.email}</p>
+       <div className={`${styles.intro} ${styles.accountIntro}`}><span className={styles.kicker}>{user.emailVerified?t("החשבון שלכם"):t("עוד צעד אחד")}</span><h1 className={styles.heading}>{user.emailVerified?t("פרטי החשבון"):t("אמתו את האימייל.")}</h1><p>{user.emailVerified?(locale==='he'?'הפרטים שלכם ואפשרויות הכניסה.':'Your profile and sign-in options.'):t("פתחו את קישור האימות שנשלח אליכם. כשתחזרו לכאן, נמשיך אוטומטית.")}</p></div>
+       <div className={styles.profileSummary}><span className={styles.avatar} aria-hidden="true">{(user.displayName||user.email||'S').slice(0,1).toUpperCase()}{user.emailVerified&&<span className={styles.avatarCheck}><Check size={12}/></span>}</span><div><strong><bdi>{user.displayName||t("החשבון שלכם")}</bdi></strong><p dir="ltr">{user.email}</p>{user.emailVerified&&<span className={styles.verified}><ShieldCheck size={12}/>{t("אימייל מאומת")}</span>}</div></div>
+       <form className={styles.nameForm} onSubmit={event=>{event.preventDefault();void run(()=>updateAccountName(name),t("נשמר"));}}>
+        <label htmlFor="account-name">{t("השם שלכם")}</label>
+        <input id="account-name" dir="auto" autoComplete="name" value={name} onChange={event=>setName(event.target.value)} maxLength={80} required disabled={locked}/>
+        <button className={styles.primary} disabled={locked||!name.trim()||name.trim()===(user.displayName??'')}>{t("שמירה")}</button>
+       </form>
        {!user.emailVerified&&<>
         <p className={styles.hint}>{t("לאחר האימות, שיחות האורח ישויכו לחשבון. בינתיים אפשר להמשיך לעבוד כאורח.")}</p>
-        <button className={styles.primary} type="button" disabled={locked} onClick={()=>void run(async()=>{const next=await refreshAccountVerification();if(!next?.emailVerified)throw new Error(t("האימייל עדיין לא אומת. פתחו את הקישור שקיבלתם ואז לחצו שוב."));router.replace('/');},t("האימייל אומת והחשבון מוכן."))}>{t("אימתתי את האימייל · המשך")}</button>
+        <button className={styles.primary} type="button" disabled={locked} onClick={()=>void run(async()=>{const next=await refreshAccountVerification();if(!next?.emailVerified)throw new Error(t("האימייל עדיין לא אומת. פתחו את הקישור שקיבלתם ואז לחצו שוב."));router.replace(returnTarget.current);},t("האימייל אומת והחשבון מוכן."))}>{t("אימתתי את האימייל · המשך")}</button>
         <button className={styles.secondary} type="button" disabled={locked} onClick={()=>void run(resendAccountVerification,t("הודעת האימות נשלחה. בדקו גם את תיקיית הספאם."))}>{t("שליחת קישור אימות נוסף")}</button>
        </>}
+       <div className={styles.signInSection}>{user.emailVerified&&<div className={styles.signInHeading}>{t("שיטות התחברות")}</div>}
+       {user.emailVerified&&hasPassword&&<div className={styles.providerRow}><span className={styles.providerIcon}><KeyRound size={17}/></span><strong>{locale==='he'?'אימייל וסיסמה':'Email & password'}</strong><span className={styles.connected}><Check size={12}/>{t("מחובר")}</span></div>}
+       {user.emailVerified&&user.providerData.some(provider=>provider.providerId==='google.com')&&<div className={styles.providerRow}><span className={styles.googleMark} aria-hidden="true">G</span><strong>Google</strong><span className={styles.connected}><Check size={12}/>{t("מחובר")}</span></div>}
        {user.emailVerified&&!hasPassword&&user.providerData.some(provider=>provider.providerId==='google.com')&&<form onSubmit={event=>{event.preventDefault();void run(()=>addAccountPassword(password),t("הסיסמה נוספה. אפשר להתחבר לאותו חשבון גם עם Google וגם עם אימייל וסיסמה."));}}>
         <label htmlFor="account-add-password">{t("הוספת סיסמה לאותו חשבון")}</label>
         <input id="account-add-password" dir="ltr" type="password" autoComplete="new-password" aria-describedby="account-add-password-hint" value={password} onChange={event=>setPassword(event.target.value)} minLength={6} maxLength={4096} required disabled={locked}/>
         <p id="account-add-password-hint" className={styles.hint}>{t("לפחות 6 תווים. הסיסמה תתווסף לחשבון Google הקיים.")}</p>
         <button className={styles.primary} disabled={locked}>{t("הוספת סיסמה לחשבון")}</button>
        </form>}
-       {user.emailVerified&&!user.providerData.some(provider=>provider.providerId==='google.com')&&<button className={styles.primary} type="button" disabled={locked} onClick={()=>void run(linkAccountGoogle,t("Google קושר לאותו חשבון ולאותן שיחות."))}>{t("קישור Google לאותו אימייל")}</button>}
-       <button className={styles.secondary} type="button" disabled={locked} onClick={()=>void run(signOutAccount,t("יצאת מהחשבון. השיחות שלו שמורות במכשיר ויופיעו כשתתחברו אליו שוב."))}>{t("יציאה מהחשבון")}</button>
+       {user.emailVerified&&!user.providerData.some(provider=>provider.providerId==='google.com')&&<div className={styles.providerRow}><span className={styles.googleMark} aria-hidden="true">G</span><strong>Google</strong><button className={styles.connectButton} type="button" disabled={locked} aria-label={t("קישור Google לאותו אימייל")} onClick={()=>void run(linkAccountGoogle,t("Google קושר לאותו חשבון ולאותן שיחות."))}>{t("קישור")}</button></div>}
+       </div>
+       <button className={styles.signOut} type="button" disabled={locked} onClick={()=>void run(signOutAccount,t("יצאת מהחשבון. השיחות שלו שמורות במכשיר ויופיעו כשתתחברו אליו שוב."))}><LogOut size={15}/>{t("יציאה מהחשבון")}</button>
       </>:mode==='reset'?<>
        <div className={styles.intro}><span className={styles.kicker}>{t("חזרה לחשבון")}</span><div className={styles.titleRow}><motion.span className={styles.modeIcon} initial={reducedMotion?false:{scale:.6,rotate:-25}} animate={{scale:1,rotate:0}} transition={reducedMotion?{duration:0}:{type:'spring',stiffness:320,damping:19,delay:.05}} aria-hidden="true"><KeyRound size={16}/></motion.span><h1 className={styles.heading}>{t("איפוס סיסמה.")}</h1></div><p>{t("נשלח לאימייל שלכם קישור לבחירת סיסמה חדשה.")}</p></div>
        <form onSubmit={event=>{event.preventDefault();void run(()=>resetAccountPassword(email),t("אם קיים חשבון מתאים, יישלח אליו קישור לאיפוס סיסמה. בדקו גם את תיקיית הספאם."));}}>
@@ -172,7 +199,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
     </AnimatePresence>
    </div></motion.div>
    {working&&<p className={styles.feedback} role="status">{t("מבצע את הבקשה…")}</p>}
-   {message&&<p className={styles.feedback} role="status">{message}</p>}
+   {message&&<div className={styles.toast}><Check size={17} aria-hidden="true"/><p role="status">{message}</p><button type="button" onClick={()=>setMessage('')} aria-label={t("סגירת הודעה")}><X size={16}/></button></div>}
    {error&&<p className={styles.error} role="alert">{error}</p>}
   </div>
  </section>;
