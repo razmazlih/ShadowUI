@@ -28,6 +28,8 @@ ui-debug.log
 /output/playwright/**/*.gif
 /output/playwright/**/*.mp4
 /output/playwright/**/*.webm
+/output/playwright/**/*.avif
+/output/playwright/**/*.zip
 
 # Temporary Next.js build output
 /tmp/
