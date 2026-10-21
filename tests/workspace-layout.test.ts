@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { UIComponent } from '../lib/schema';
-import { automaticLayout, columnLayout, parseLayout, reconcileLayout, viewportLayout } from '../lib/workspace-layout';
+import { automaticLayout, columnLayout, parseLayout, reconcileLayout, viewportLayout, moveViewportTool, parseViewportPages } from '../lib/workspace-layout';
 
 const component = (id: string, type: UIComponent['type'] = 'chart'): UIComponent => ({ id, type, title: id, reason: '', span: 'normal', items: [] });
 
@@ -263,4 +263,42 @@ test('column presets change geometry and survive saved-layout reconciliation',()
   assert.equal(layout.mode,'fixed');
   assert.deepEqual(reconcileLayout(parseLayout(JSON.parse(JSON.stringify(layout)))!,components),layout);
  }
+});
+
+
+test('optional page choices repack safely across screen sizes and preserve every tool', () => {
+  const components = ['a', 'b', 'c', 'd', 'new'].map(id => component(id));
+  const choices = [['a', 'c'], ['b', 'd']];
+  const desktop = viewportLayout(components, components.map(item => item.id), 900, 452, choices);
+  assert.deepEqual(desktop.groups.map(group => group.ids), [['a', 'c'], ['b', 'd'], ['new']]);
+  const mobile = viewportLayout(components, components.map(item => item.id), 390, 700, choices);
+  assert.deepEqual(mobile.groups.map(group => group.ids), [['a'], ['c'], ['b'], ['d'], ['new']]);
+  assert.deepEqual(choices, [['a', 'c'], ['b', 'd']]);
+  const removed = viewportLayout(components.slice(1), ['b', 'c', 'd'], 900, 452, [['a', 'c', 'c'], ['b', 'd']]);
+  assert.deepEqual(removed.groups.map(group => group.ids), [['c'], ['b', 'd'], ['new']]);
+});
+
+test('chosen pages overflow locally instead of squeezing cards below their minimum size', () => {
+  const components = ['a', 'b', 'c', 'd'].map(id => component(id, 'table'));
+  const layout = viewportLayout(components, ['a', 'b', 'c', 'd'], 900, 452, [['a', 'b', 'c'], ['d']]);
+  assert.deepEqual(layout.groups.map(group => group.ids), [['a', 'b'], ['c'], ['d']]);
+  assert.ok(layout.groups.every(group => group.rows <= 2));
+  assert.deepEqual(viewportLayout(components, ['a', 'b', 'c', 'd'], 900, 452, []), viewportLayout(components, ['a', 'b', 'c', 'd'], 900, 452));
+});
+
+test('moving one tool preserves other page order and never mutates the supplied choices', () => {
+  const pages = [['a', 'b'], ['c'], ['d']];
+  assert.deepEqual(moveViewportTool(pages, 'b', 1), [['a'], ['c', 'b'], ['d']]);
+  assert.deepEqual(moveViewportTool(pages, 'c', 3), [['a', 'b'], ['d'], ['c']]);
+  assert.deepEqual(moveViewportTool(pages, 'missing', 1), pages);
+  assert.deepEqual(moveViewportTool(pages, 'a', -1), pages);
+  assert.deepEqual(pages, [['a', 'b'], ['c'], ['d']]);
+});
+
+test('persisted page choices reject malformed, duplicated and unsafe tool identities', () => {
+  assert.deepEqual(parseViewportPages([['a', 'b'], ['c']]), [['a', 'b'], ['c']]);
+  assert.deepEqual(parseViewportPages([]), []);
+  for (const value of [null, {}, [[]], [['a'], ['a']], [['__proto__']], [[1]], [Array.from({ length: 17 }, (_, i) => String(i))]]) {
+    assert.equal(parseViewportPages(value), null);
+  }
 });

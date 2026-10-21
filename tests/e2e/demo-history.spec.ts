@@ -46,7 +46,7 @@ test('mobile recent history closes on selection and restores editable work withi
  await page.getByLabel('Toggle navigation').click();await page.getByRole('button',{name:/New workspace/}).click();
  await expect(page.locator('.sidebar')).not.toBeVisible();
  await page.getByRole('button',{name:/Go somewhere new/}).click();
- await page.locator('.viewport-tool-nav').getByRole('button',{name:'Budget ceiling',exact:true}).click();
+ await page.locator('.viewport-tool-nav').getByRole('button',{name:/Budget ceiling/}).click();
  await expect(page.getByRole('heading',{name:'Budget ceiling'})).toBeVisible();
  await page.getByLabel('Toggle navigation').click();
  await page.locator('.workspace-history-open').filter({hasText:learning.title}).click();

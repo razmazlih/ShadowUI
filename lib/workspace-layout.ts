@@ -23,7 +23,20 @@ export type ViewportLayout = {
  * Dimensions describe the card area after the toolbar and tool selector are reserved.
  * Undersized viewports still expose one card; the renderer supplies accessible scrolling.
  */
-export function viewportLayout(components: UIComponent[], order: string[], width: number, height: number): ViewportLayout {
+export function viewportLayout(components: UIComponent[], order: string[], width: number, height: number, preferredPages?: string[][]): ViewportLayout {
+  if (preferredPages?.length) {
+    const available = new Map(components.map(component => [component.id, component]));
+    const seen = new Set<string>();
+    const pages = preferredPages.map(page => page.filter(id => {
+      if (!available.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }));
+    const remaining = [...new Set([...order, ...components.map(component => component.id)])].filter(id => available.has(id) && !seen.has(id));
+    if (remaining.length) pages.push(remaining);
+    const packed = pages.filter(page => page.length).map(page => viewportLayout(page.map(id => available.get(id)!), page, width, height));
+    return { columns: packed[0]?.columns ?? viewportLayout([], [], width, height).columns, groups: packed.flatMap(page => page.groups) };
+  }
   const availableWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
   const availableHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
   const mobile = availableWidth < 680;
@@ -68,6 +81,28 @@ export function viewportLayout(components: UIComponent[], order: string[], width
   // A solitary card is the current main tool rather than a narrow dashboard tile.
   for (const packed of groups) if (packed.ids.length === 1) packed.placements[packed.ids[0]].span = columns;
   return { columns, groups };
+}
+
+/** Optional page choices contain only tool identities; geometry remains automatic. */
+export function moveViewportTool(pages: string[][], id: string, targetPage: number): string[][] {
+  if (!pages.some(page => page.includes(id)) || !Number.isInteger(targetPage) || targetPage < 0 || targetPage > pages.length) return pages.map(page => [...page]);
+  const next = pages.map(page => page.filter(item => item !== id));
+  if (!next[targetPage]) next[targetPage] = [];
+  next[targetPage].push(id);
+  return next.filter(page => page.length);
+}
+
+export function parseViewportPages(value: unknown): string[][] | null {
+  if (!Array.isArray(value) || value.length > 16) return null;
+  const seen = new Set<string>();
+  for (const page of value) {
+    if (!Array.isArray(page) || !page.length || page.length > 16) return null;
+    for (const id of page) {
+      if (!safeId(id) || seen.has(id) || seen.size >= 16) return null;
+      seen.add(id);
+    }
+  }
+  return value.map(page => [...page]);
 }
 
 /** Reading and practice form a lesson, rather than independent dashboard panels. */
