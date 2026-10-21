@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
 import {AnimatePresence, motion, useIsPresent, useReducedMotion, type HTMLMotionProps} from 'motion/react';
 import {GripVertical, MoreHorizontal, MoveDiagonal2, Maximize2, Minimize2, SlidersHorizontal, X} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
@@ -45,6 +45,8 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const [density,setDensity]=useState<'compact'|'comfortable'>('compact');
  const [presentation,setPresentation]=useState<'fit'|'vertical'>('fit');
  const [availableHeight,setAvailableHeight]=useState(220);
+ const [measuredWorkspace,setMeasuredWorkspace]=useState<string|null>(null);
+ const [motionWorkspace,setMotionWorkspace]=useState<string|null>(null);
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [expandedId,setExpandedId]=useState<string|null>(null);
  const stage=useRef<HTMLDivElement>(null);
@@ -57,6 +59,8 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const reconciled=reconcileLayout(saved.workspaceId===workspaceId?saved.layout:automaticLayout(components),components);
  const layout=reconciled.mode==='auto'?automaticLayout(components,availableWidth):reconciled;
  const fit=presentation==='fit';
+ const initialized=saved.ready&&saved.workspaceId===workspaceId&&measuredWorkspace===workspaceId;
+ const animateLayout=initialized&&motionWorkspace===workspaceId;
  const viewport=viewportLayout(components,layout.order,availableWidth,availableHeight);
  const selected=selectedId&&layout.order.includes(selectedId)?selectedId:layout.order[0];
  const expanded=expandedId&&layout.order.includes(expandedId)?expandedId:null;
@@ -72,32 +76,42 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const composition=components.map(c=>`${c.id}:${c.type}:${c.span}`).join('|');
  // Content typing does not trigger card layout animations.
  const layoutMotionKey=`${workspaceId}:${composition}:${layout.order.join(',')}:${availableWidth}:${fit?availableHeight:0}:${presentation}:${expanded}:${groupIndex}:${density}:${JSON.stringify(layout.sizes)}`;
- useEffect(()=>{
+ // Initial measurement is not a layout change to animate. Keep Motion's
+ // dependency stable through initialization and arming; later edits use it normally.
+ const initialGeometry=useRef(layoutMotionKey);
+ if(!animateLayout)initialGeometry.current=layoutMotionKey;
+ const motionDependency=layoutMotionKey===initialGeometry.current?`${workspaceId}:initial`:layoutMotionKey;
+ const measure=useCallback(()=>{
   const element=grid.current;if(!element)return;
-  // Measure the available canvas, not a reading column narrowed by the current layout.
   const canvas=element.closest<HTMLElement>('.workspace')??element.parentElement!;
-  const measure=()=>{
+   const surface=element.parentElement!;
+   if(canvas.clientWidth<=0||(fit&&surface.clientHeight<=0&&components.length>0))return;
    const style=getComputedStyle(canvas);
    setAvailableWidth(Math.round(canvas.clientWidth-(parseFloat(style.paddingLeft)||0)-(parseFloat(style.paddingRight)||0)));
-   const surface=element.parentElement!;
+   setMeasuredWorkspace(workspaceId);
    setAvailableHeight(Math.round(fit?surface.clientHeight:element.clientHeight));
    if(fit)canvas.closest<HTMLElement>('.shell')?.style.setProperty('--workspace-tools-bottom',`${Math.ceil(surface.getBoundingClientRect().top)}px`);
    if(fit)return;
    const styles=getComputedStyle(element);
-   const gap=parseFloat(styles.rowGap)||12;
-   const rowHeight=parseFloat(styles.gridAutoRows)||1;
+   // Use the final masonry metrics even before its class is enabled.
+   const gap=parseFloat(styles.getPropertyValue('--masonry-row-gap'))||12;
+   const rowHeight=parseFloat(styles.getPropertyValue('--masonry-row-height'))||1;
    const next:Record<string,number>=Object.create(null);
-   element.querySelectorAll<HTMLElement>(':scope > [data-component-id]').forEach(card=>{next[card.dataset.componentId!]=Math.max(1,Math.ceil((card.getBoundingClientRect().height+gap)/(rowHeight+gap)));});
+   element.querySelectorAll<HTMLElement>(':scope > [data-component-id]').forEach(card=>{next[card.dataset.componentId!]=Math.max(1,Math.ceil((card.offsetHeight+gap)/(rowHeight+gap)));});
    setRowSpans(previous=>Object.keys(previous).length===Object.keys(next).length&&Object.keys(next).every(id=>previous[id]===next[id])?previous:next);
-  };
+ },[workspaceId,composition,fit]);
+ useLayoutEffect(()=>{if(!animateLayout)measure();},[measure,animateLayout]);
+ useEffect(()=>{
+  const element=grid.current;if(!element)return;
+  const canvas=element.closest<HTMLElement>('.workspace')??element.parentElement!;
   const observer=new ResizeObserver(measure);observer.observe(element);observer.observe(canvas);observer.observe(element.parentElement!);
   element.querySelectorAll(':scope > [data-component-id]').forEach(card=>observer.observe(card));
   measure();return ()=>observer.disconnect();
- },[workspaceId,composition,fit]);
+ },[measure]);
  useEffect(()=>{
   setSaved(previous=>{if(!previous.ready||previous.workspaceId!==workspaceId)return previous;const next=reconcileLayout(previous.layout,components);return JSON.stringify(next)===JSON.stringify(previous.layout)?previous:{...previous,layout:next};});
  },[workspaceId,composition]);
- useEffect(()=>{
+ useLayoutEffect(()=>{
   let restored:LayoutState|null=null;
   try{const raw=deviceDataStorage().getItem(storageKey);if(raw)restored=parseLayout(JSON.parse(raw));setDensity(deviceDataStorage().getItem(`${storageKey}:density`)==='comfortable'?'comfortable':'compact');setPresentation(deviceDataStorage().getItem(`${storageKey}:presentation`)==='vertical'?'vertical':'fit');}catch{}
   setSaved({workspaceId,layout:restored??automaticLayout(components),ready:true});
@@ -105,6 +119,14 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   // Restore once per workspace; content edits are reconciled without resetting the layout.
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[workspaceId,storageKey]);
+ // The first visible frame already has measured geometry and restored settings.
+ // Arm subsequent layout transitions after it is painted, without delaying display.
+ useEffect(()=>{
+  if(!initialized)return;
+  let paint=0;
+  const frame=requestAnimationFrame(()=>{paint=requestAnimationFrame(()=>setMotionWorkspace(workspaceId));});
+  return()=>{cancelAnimationFrame(frame);cancelAnimationFrame(paint);};
+ },[workspaceId,initialized]);
  useEffect(()=>{
   if(!saved.ready||saved.workspaceId!==workspaceId)return;
   try{deviceDataStorage().setItem(storageKey,JSON.stringify(reconcileLayout(saved.layout,components)));setStorageWarning(false);}catch{setStorageWarning(true);}
@@ -236,7 +258,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  useEffect(()=>()=>{gesture.current=null;},[]);
  const pointerHandlers={onPointerMove:update,onPointerUp:(e:PointerEvent<HTMLButtonElement>)=>finish(e),onPointerCancel:(e:PointerEvent<HTMLButtonElement>)=>finish(e,true),onLostPointerCapture:cancel,onKeyDown:(e:React.KeyboardEvent<HTMLButtonElement>)=>{if(e.key==='Escape')cancel();}};
  const byId=new Map(components.map(c=>[c.id,c]));
- return <div ref={stage} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
+ return <div ref={stage} data-layout-ready={initialized} aria-busy={!initialized} inert={!initialized} style={{visibility:initialized?'visible':'hidden'}} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
   <div className="viewport-controls">
 
   {<div className="layout-toolbar"><details className="layout-settings" onToggle={event=>positionMenu(event.currentTarget)} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה':'Display'}</span><span>{fit?(he?'התאמה למסך':'Fit to screen'):layout.mode==='auto'?(he?'אנכית · אוטומטי':'Vertical · Automatic'):(he?'אנכית · מותאם אישית':'Vertical · Custom')}</span></summary><div className="layout-settings-panel">
@@ -257,7 +279,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
    const hidden=fit&&!visibleIds.has(id);
    const placement=group?.placements[id];
    const Icon=toolIcons[c.type];const size=preview?.id===id?preview.size:layout.sizes[id];
-   return <AnimatedCard key={id} viewportHidden={hidden} instant={!!reducedMotion} inert={hidden} layout={hidden||reducedMotion||manipulating||dragging?false:true} layoutDependency={layoutMotionKey} initial={reducedMotion?false:{opacity:0,y:8}} animate={{opacity:hidden?0:1,y:0}} exit={reducedMotion?{opacity:1}:{opacity:0}} transition={{layout:{type:'spring',duration:0.38,bounce:0.05},opacity:{duration:reducedMotion?0:0.2},y:{duration:reducedMotion?0:0.2}}} onFocusCapture={()=>{if(fit&&!hidden)setSelectedId(id);}} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${hidden?' viewport-card-hidden':''}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridColumn:fit?(expanded||group?.ids.length===1?'1 / -1':placement?`${placement.column} / span ${placement.span}`:undefined):undefined,gridRowStart:fit?(expanded?'1':placement?String(placement.row):undefined):undefined,gridRowEnd:fit?'span 1':!flowing&&rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
+   return <AnimatedCard key={id} viewportHidden={hidden} instant={!animateLayout||!!reducedMotion} inert={hidden} layout={hidden||reducedMotion||manipulating||dragging?false:true} layoutDependency={motionDependency} initial={false} animate={{opacity:hidden?0:1,y:0}} exit={reducedMotion?{opacity:1}:{opacity:0}} transition={{layout:{type:'spring',duration:!animateLayout||reducedMotion?0:0.38,bounce:0.05},opacity:{duration:!animateLayout||reducedMotion?0:0.2},y:{duration:!animateLayout||reducedMotion?0:0.2}}} onFocusCapture={()=>{if(fit&&!hidden)setSelectedId(id);}} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${hidden?' viewport-card-hidden':''}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridColumn:fit?(expanded||group?.ids.length===1?'1 / -1':placement?`${placement.column} / span ${placement.span}`:undefined):undefined,gridRowStart:fit?(expanded?'1':placement?String(placement.row):undefined):undefined,gridRowEnd:fit?'span 1':!flowing&&rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
     <header className="r-card-header"><div className="r-card-mark"><Icon size={18} aria-hidden="true"/></div><h3>{c.title}</h3><div className="card-controls">{fit&&<button type="button" className="viewport-expand" aria-label={`${expanded===id?(he?'החזרת':'Restore'):(he?'הרחבת':'Expand')} ${c.title}`} aria-expanded={expanded===id} onClick={event=>expandTool(id,event.currentTarget)}>{expanded===id?<Minimize2 size={16}/>:<Maximize2 size={16}/>}</button>}<button className="drag-handle" type="button" aria-label={`${he?'הזזת':'Move'} ${c.title}`} title={he?'גרירה לשינוי מיקום':'Drag to move'} aria-keyshortcuts="ArrowUp ArrowDown Home End" onPointerDown={event=>begin(event,id,'move')} {...pointerHandlers} onKeyDown={event=>{
       if(event.key==='Escape'){cancel();return;}
       const position=event.key==='ArrowUp'?index-1:event.key==='ArrowDown'?index+1:event.key==='Home'?0:event.key==='End'?layout.order.length-1:null;
