@@ -68,7 +68,7 @@ function AccountStep({children,direction,reducedMotion,view}:{children:ReactNode
   visible:{opacity:1,x:0,y:0,scale:1,rotateY:0,filter:'blur(0px)',transition:{duration:reducedMotion?0:.44,ease:[.22,1,.36,1] as [number,number,number,number]}},
   exit:(travel:number)=>({opacity:reducedMotion?1:0,x:reducedMotion?0:travel*-16,y:reducedMotion?0:-4,scale:reducedMotion?1:.985,rotateY:reducedMotion?0:travel*2,filter:reducedMotion?'blur(0px)':'blur(3px)',transition:{duration:reducedMotion?0:.18,ease:'easeIn' as const}}),
  };
- return <motion.div className={styles.step} data-auth-mode={view} inert={!present} aria-hidden={!present||undefined} custom={direction} variants={variants} initial={reducedMotion?false:'enter'} animate="visible" exit="exit" style={{transformPerspective:700,transformStyle:'preserve-3d'}}>{children}</motion.div>;
+ return <motion.div className={styles.step} data-auth-mode={view} inert={!present} aria-hidden={!present||undefined} custom={direction} variants={variants} initial={false} animate="visible" exit="exit" style={{transformPerspective:700,transformStyle:'preserve-3d'}}>{children}</motion.div>;
 }
 export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:{locale?:'he'|'en';onUser?:(user:User|null)=>void;disabled?:boolean}){
  const t=(text:string)=>locale==='en'?(english[text]??text):text;
@@ -80,7 +80,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
  const groupId=useId();
  const content=useRef<HTMLDivElement>(null);
  const [contentHeight,setContentHeight]=useState<number>();
- useEffect(()=>{const element=content.current;if(!element)return;const observer=new ResizeObserver(()=>setContentHeight(element.getBoundingClientRect().height));observer.observe(element);return()=>observer.disconnect();},[]);
+ useEffect(()=>{const element=content.current;if(!element)return;const observer=new ResizeObserver(()=>setContentHeight(element.offsetHeight));observer.observe(element);return()=>observer.disconnect();},[]);
  const reducedMotion=Boolean(useReducedMotion());
  useEffect(()=>observeAccountUser(next=>{setUser(next);setLoading(false);callback.current(next);},failure=>{setError(accountAuthError(failure,localeRef.current));setLoading(false);}),[]);
  const locked=working||disabled||loading;
@@ -98,7 +98,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
  }
  const hasPassword=user?.providerData.some(provider=>provider.providerId==='password');
  const register=mode==='register';
- const screen=loading?'loading':!firebaseClientConfigured?'guest':user?(user.emailVerified?'account':'verify'):mode;
+ const screen=!firebaseClientConfigured?'guest':user?(user.emailVerified?'account':'verify'):mode;
  return <section className={styles.account} dir={locale==='he'?'rtl':'ltr'} aria-label={t("חשבון ושמירת שיחות")} aria-busy={loading||working}>
   <div id="account-panel" className={styles.panel}>
    {!user&&firebaseClientConfigured&&<LayoutGroup id={groupId}><div className={styles.modes} data-auth-mode-switch role="group" aria-label={t("בחירת כניסה או הרשמה")}>
@@ -108,7 +108,7 @@ export default function AccountPanel({onUser=()=>{},disabled=false,locale='he'}:
    <motion.div className={styles.transition} initial={false} animate={{height:contentHeight??"auto"}} transition={{height:{duration:reducedMotion?0:.24,ease:[.22,1,.36,1]}}}><div ref={content}>
     <AnimatePresence mode="wait" initial={false} custom={direction}>
      <AccountStep key={screen} view={screen} direction={direction} reducedMotion={reducedMotion}>
-      {screen==='loading'?<><h1 className={styles.heading}>{t("טוענים את החשבון…")}</h1><p>{t("עוד רגע אפשר יהיה להמשיך.")}</p></>:screen==='guest'?<><h1 className={styles.heading}>{t("ממשיכים כאורח.")}</h1><p role="status">{t("השיחות נשמרות כאורח במכשיר זה. התחברות לחשבון תהיה זמינה לאחר הגדרת Firebase באתר.")}</p></>:user?<>
+      {screen==='guest'?<><h1 className={styles.heading}>{t("ממשיכים כאורח.")}</h1><p role="status">{t("השיחות נשמרות כאורח במכשיר זה. התחברות לחשבון תהיה זמינה לאחר הגדרת Firebase באתר.")}</p></>:user?<>
        <div className={styles.intro}><span className={styles.kicker}>{user.emailVerified?t("החשבון שלכם"):t("עוד צעד אחד")}</span><h1 className={styles.heading}>{user.emailVerified?t("הכול במקום אחד."):t("אמתו את האימייל.")}</h1><p>{user.emailVerified?t("כאן מנהלים את שיטות ההתחברות לאותו חשבון."):t("פתחו את קישור האימות שנשלח אליכם, ואז חזרו לכאן להשלמת ההרשמה.")}</p></div>
        <p className={styles.identity} dir="auto">{user.email}</p>
        {!user.emailVerified&&<>

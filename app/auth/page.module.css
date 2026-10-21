@@ -15,8 +15,8 @@
 @media(prefers-reduced-motion:reduce){.continue,.continue span{transition:none}.continue:hover span{transform:none}}
 .glow{animation:auth-ambient 14s ease-in-out infinite alternate;transform-origin:50% 30%}.card{animation:auth-card-arrive .7s cubic-bezier(.22,1,.36,1) both}.card::before{animation:auth-edge-light 1.4s ease-out both}.brand>span{animation:auth-brand-arrive .7s cubic-bezier(.22,1,.36,1) both}
 @keyframes auth-ambient{from{opacity:.6;transform:translate3d(-28px,-12px,0) scale(.94)}to{opacity:1;transform:translate3d(28px,18px,0) scale(1.08)}}
-@keyframes auth-card-arrive{from{opacity:0;transform:perspective(1000px) translateY(18px) rotateX(2deg) scale(.985)}to{opacity:1;transform:perspective(1000px) translateY(0) rotateX(0) scale(1)}}
-@keyframes auth-brand-arrive{from{opacity:0;transform:translateY(-5px) rotate(-8deg) scale(.9)}to{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
+@keyframes auth-card-arrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes auth-brand-arrive{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 @keyframes auth-edge-light{0%{opacity:0;transform:scaleX(.3)}55%{opacity:1;transform:scaleX(1)}100%{opacity:.7;transform:scaleX(1)}}
 @media(prefers-reduced-motion:reduce){.glow,.card,.card::before,.brand>span{animation:none}}
 
