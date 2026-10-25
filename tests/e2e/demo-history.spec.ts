@@ -20,7 +20,7 @@ test('all starting points create distinct history entries and preserve existing 
   if(localStorage.getItem('shadowui.device.v1.guest'))return;
   localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'history-test',importedGuests:[],snapshot:{workspaces:[{id:'existing-user-work',title:'Existing work',description:'Keep this',goal:'Keep my notes',components:[{id:'notes',type:'notes',title:'Notes',reason:'User content',span:'wide',items:[],text:'Do not change'}]}],active:'existing-user-work'}}));
  });
- await page.goto('/');await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Do not change');
+ await page.goto('/?conversation=existing-user-work');await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Do not change');
  const original=(await guestWorkspaces(page))[0];const created:string[]=[];
  for(const label of ['Learn something deeply','Organize a working week','Go somewhere new','Make a better decision']){
   await page.getByRole('button',{name:/New workspace/}).click();

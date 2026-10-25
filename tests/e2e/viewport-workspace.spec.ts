@@ -30,7 +30,7 @@ async function openWorkspace(page:Page,{he=false,count=16,live=false,components=
   if(!localStorage.getItem('shadowui.device.v1.guest'))localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{workspaces:[workspace],active:workspace.id}}));
   localStorage.setItem('shadowui.ui-language.v1',he?'he':'en');
  },{workspace,he});
- await page.goto('/');
+ await page.goto(`/?conversation=${encodeURIComponent(workspace.id)}`);
  await expect(page.locator('.workspace-stage')).toHaveClass(/viewport-fit/);
  expect(await page.locator('.viewport-tool-nav button').count()).toBeGreaterThan(0);
  await expect(page.locator('.viewport-tool-nav [aria-current=page]')).toHaveCount(1);
@@ -371,7 +371,8 @@ test('page navigation, horizontal gestures and optional assignments preserve dra
  await page.getByRole('button',{name:'Next page',exact:true}).click();
  await page.getByRole('button',{name:'Edit page',exact:true}).click();
  const editor=page.getByRole('dialog');
- for(const checkbox of await editor.locator('input:checked').all())await checkbox.uncheck();
+ const selectedTools=editor.locator('input:checked');
+ while(await selectedTools.count())await selectedTools.first().uncheck();
  await editor.getByRole('checkbox',{name:'Reading',exact:true}).check();
  await editor.getByRole('button',{name:'Apply to page',exact:true}).click();
  await expect(editor).toBeHidden();

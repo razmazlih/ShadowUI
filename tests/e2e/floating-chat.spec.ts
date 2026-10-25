@@ -3,7 +3,7 @@ import {test,expect,type Page} from '@playwright/test';
 async function openWorkspace(page:Page){
  await page.addInitScript(()=>localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{active:'floating-chat',workspaces:[{id:'floating-chat',title:'Assistant workspace',goal:'Keep my notes',description:'A workspace with a conversation',components:[{id:'notes',type:'notes',title:'Working notes',reason:'Keep working while chatting',items:[],text:'Original notes'}]}],conversations:{'floating-chat':[{role:'user',content:'Keep this earlier request'},{role:'assistant',content:'Your earlier answer is still here.'}]}}})));
  await page.route('**/api/plan',route=>route.fulfill({json:route.request().method()==='GET'?{configured:true,storageReady:true,liveEnabled:true,simulation:false,spent:0,limit:1}:{operation:'reply',intent:'workspace_question',explanation:'Your new answer appears in this assistant.',mode:'live'}}));
- await page.goto('/');
+ await page.goto('/?conversation=floating-chat');
  await expect(page.locator('.breadcrumb strong').filter({hasText:'Assistant workspace'})).toBeVisible();
  const launcher=page.getByRole('button',{name:/^(Open assistant|פתיחת העוזר)$/});
  if(await launcher.isVisible())await launcher.click();

@@ -60,7 +60,7 @@ for(const {width,height,vertical} of [
   localStorage.setItem('shadowui.layout.v1:entry-workspace',JSON.stringify({mode:'fixed',order:['timer','source','tasks','notes','plan','links'],sizes:Object.fromEntries(components.map(component=>[component.id,{columns:6,minHeight:360}]))}));
  },{vertical});
  await page.addInitScript(captureEntry);
- await page.goto('/');
+ await page.goto('/?conversation=entry-workspace');
  const first=await expectStableEntry(page);
  expect(first.ids[0]).toBe('timer');
  expect(first.ids.length).toBe(width<680?1:6);

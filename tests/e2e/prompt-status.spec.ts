@@ -64,7 +64,7 @@ test('response notices and errors belong only to their conversation',async({page
   if(prompt==='Fail Beta')return route.fulfill({status:500,json:{error:'Only Beta failed'}});
   return route.fulfill({json:{operation:'reply',explanation:`Reply for ${prompt}`,mode:'live'}});
  });
- await page.goto('/');
+ await page.goto('/?conversation=alpha');
  const feedback=page.locator('#request-status');
  const input=page.getByLabel('What do you want to accomplish?');
  const openAssistant=async()=>{

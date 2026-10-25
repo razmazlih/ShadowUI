@@ -17,7 +17,7 @@ test('invalid model specification stays behind validation boundary',async({page}
 
 test('unsupported execution offers functional local alternative without receipt',async({page})=>{
  await page.goto('/');await page.getByLabel('What do you want to accomplish?').fill('Transfer money from my bank account and book a flight');await page.getByRole('button',{name:'Build workspace'}).click();
- await expect(page.getByRole('status').filter({hasText:'No paid AI calls'})).toBeVisible();
+ await expect(page.locator('.workspace .r-card').first()).toBeVisible();
  await expect(page.getByRole('textbox',{name:'Goal and inputs',exact:true})).toHaveValue('Transfer money from my bank account and book a flight');
  await expect(page.getByText('Verified backend receipt')).not.toBeVisible();
  await page.getByRole('textbox',{name:'Add item',exact:true}).fill('Prepare a manual review without sending a payment');

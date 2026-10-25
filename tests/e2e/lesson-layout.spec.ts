@@ -16,7 +16,7 @@ for(const width of [1440,1200,390])test(`lesson cards fill the reading column wi
   const workspace={id:'lesson-layout-test',title:'לומדים מה זה API',description:'הסבר, דוגמה ותרגול',goal:'תלמד אותי מה זה api',components};
   localStorage.setItem('shadowui.device.v1.guest',JSON.stringify({generation:'e2e-fixture',importedGuests:[],snapshot:{workspaces:[workspace],active:workspace.id}}));
  });
- await page.goto('/');
+ await page.goto('/?conversation=lesson-layout-test');
  // These assertions cover the retained reading layout, not the default viewport mode.
  await selectPresentation(page,'vertical');
  await page.getByRole('button',{name:'Toggle language direction'}).click();
