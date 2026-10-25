@@ -32,11 +32,14 @@ async function openWorkspace(page:Page,{he=false,count=16,live=false,components=
  },{workspace,he});
  await page.goto('/');
  await expect(page.locator('.workspace-stage')).toHaveClass(/viewport-fit/);
- await expect(page.locator('.viewport-tool-nav button')).toHaveCount(components.length);
+ expect(await page.locator('.viewport-tool-nav button').count()).toBeGreaterThan(0);
+ await expect(page.locator('.viewport-tool-nav [aria-current=page]')).toHaveCount(1);
 }
 
 async function chooseTool(page:Page,title:string){
- await page.locator('.viewport-tool-nav').getByRole('button',{name:title,exact:true}).click();
+ const card=page.locator('.r-card').filter({has:page.getByRole('heading',{name:title,exact:true,includeHidden:true})});
+ const id=await card.getAttribute('data-component-id');
+ await page.locator(`.viewport-tool-nav button[data-page-tools~=${JSON.stringify(id)}]`).click();
  await expect(page.locator('.r-card').filter({has:page.getByRole('heading',{name:title,exact:true})})).toBeVisible();
 }
 
@@ -87,8 +90,8 @@ for(const [width,height] of [[1440,900],[1366,768],[1024,768],[390,844],[320,568
   const hidden=page.locator('.viewport-card-hidden');
   expect(await hidden.count()).toBeGreaterThan(0);
   expect(await hidden.evaluateAll(cards=>cards.every(card=>(card as HTMLElement).inert))).toBe(true);
-  const navButton=page.locator('.viewport-tool-nav').getByRole('button',{name:'Notes 8',exact:true});
-  await expect(navButton).toHaveAttribute('aria-pressed','true');
+  const navButton=page.locator('.viewport-tool-nav button[aria-current=page]');
+  await expect(navButton).toHaveAttribute('aria-current','page');
   const button=await navButton.boundingBox();
   const nav=await page.locator('.viewport-tool-nav').boundingBox();
   expect(button!.x).toBeGreaterThanOrEqual(nav!.x-1);
@@ -251,7 +254,7 @@ test('responsive narrowing keeps the currently edited desktop tool active',async
  await page.setViewportSize({width:390,height:844});
  await expect(page.locator('#tool-tasks')).toBeVisible();
  await expect(draft).toHaveValue('Editing this tool should survive narrowing');
- await expect(page.locator('.viewport-tool-nav').getByRole('button',{name:'Tasks',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.viewport-tool-nav button[aria-current=page]')).toHaveAttribute('aria-current','page');
  await expectBounded(page);
 });
 
@@ -302,9 +305,8 @@ test('records a normal-motion tour of grouping, expansion and navigation resize'
  try{
   await openWorkspace(page);
   await page.waitForTimeout(500);
-  // Install the sampler before the click: CI may finish the fade while a
-  // separate browser command is being scheduled after navigation.
-  const fadePromise=page.locator('#tool-reading').evaluate(element=>new Promise<Array<{opacity:number;visible:boolean;inert:boolean}>>(resolve=>{
+  // Sample from the first frame so an outgoing card cannot overlay the next page.
+  const visibilityPromise=page.locator('#tool-reading').evaluate(element=>new Promise<Array<{opacity:number;visible:boolean;inert:boolean}>>(resolve=>{
    const samples:Array<{opacity:number;visible:boolean;inert:boolean}>=[];
    let started:number|undefined;
    function sample(){
@@ -317,11 +319,11 @@ test('records a normal-motion tour of grouping, expansion and navigation resize'
   }));
   await expect(page.locator('#tool-reading')).toHaveAttribute('data-motion-sampling','ready');
   await chooseTool(page,'Calculator');
-  const fade=await fadePromise;
+  const visibility=await visibilityPromise;
   await page.locator('#tool-reading').evaluate(element=>element.removeAttribute('data-motion-sampling'));
-  expect(fade.every(sample=>sample.inert)).toBe(true);
-  expect(fade.some(sample=>sample.visible&&sample.opacity>0&&sample.opacity<1)).toBe(true);
-  expect(fade.at(-1)?.visible).toBe(false);
+  expect(visibility.every(sample=>sample.inert)).toBe(true);
+  expect(visibility.every(sample=>!sample.visible),'outgoing cards leave immediately; only the page surface moves').toBe(true);
+  expect(visibility.at(-1)?.visible).toBe(false);
   await page.getByRole('button',{name:'Expand Calculator',exact:true}).click();
   await expect.poll(()=>page.locator('#tool-calculator').evaluate(element=>{const card=element.getBoundingClientRect(),grid=element.parentElement!.getBoundingClientRect();return Math.abs(card.width-grid.width)<2&&Math.abs(card.height-grid.height)<2;})).toBe(true);
   await page.waitForTimeout(500);
@@ -346,4 +348,145 @@ test('records a normal-motion tour of grouping, expansion and navigation resize'
   await context.close();
   await recordingBrowser.close();
  }
+});
+
+test('page navigation, horizontal gestures and optional assignments preserve drafts',async({page})=>{
+ await page.setViewportSize({width:1024,height:768});
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await openWorkspace(page);
+ const tabs=page.locator('.page-tabs button');
+ await expect(page.locator('.page-tabs [aria-current=page]')).toHaveCount(1);
+ const firstLabel=await tabs.first().getAttribute('aria-label');
+ await page.locator('#tool-reading textarea').fill('Draft remains across pages');
+ const surface=page.locator('.workspace-surface');
+ // Both samples belong to one momentum burst. Separate driver commands can
+ // exceed the deliberate-gesture quiet window on a loaded CI runner.
+ await surface.evaluate(element=>{for(let sample=0;sample<2;sample++)element.dispatchEvent(new WheelEvent('wheel',{deltaX:150,deltaY:0,bubbles:true,cancelable:true}));});
+ await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
+ await page.getByRole('button',{name:'Previous page',exact:true}).click();
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await expect(page.locator('#tool-reading textarea')).toHaveValue('Draft remains across pages');
+ await page.locator('#tool-reading textarea').dispatchEvent('wheel',{deltaX:0,deltaY:200});
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await page.getByRole('button',{name:'Next page',exact:true}).click();
+ await page.getByRole('button',{name:'Edit page',exact:true}).click();
+ const editor=page.getByRole('dialog');
+ for(const checkbox of await editor.locator('input:checked').all())await checkbox.uncheck();
+ await editor.getByRole('checkbox',{name:'Reading',exact:true}).check();
+ await editor.getByRole('button',{name:'Apply to page',exact:true}).click();
+ await expect(editor).toBeHidden();
+ await expect(page.locator('#tool-reading')).toBeVisible();
+ await expect(page.locator('.page-tabs [aria-current=page]')).toHaveCount(1);
+ await page.reload();
+ await chooseTool(page,'Reading');
+ await expect(page.locator('#tool-reading textarea')).toHaveValue('Draft remains across pages');
+ await page.getByRole('button',{name:'Edit page',exact:true}).click();
+ await page.getByRole('button',{name:'Reset to automatic'}).click();
+ await expect(tabs.first()).toHaveAttribute('aria-label',firstLabel!);
+ await expect(page.getByRole('dialog')).toBeHidden();
+ await page.screenshot({path:'output/playwright/workspace-pages-desktop.png'});
+ await expectBounded(page);
+});
+
+for(const he of [false,true])test(`touch paging follows reading direction and ignores editors, ${he?'RTL':'LTR'}`,async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await openWorkspace(page,{he});
+ const surface=page.locator('.workspace-surface'),tabs=page.locator('.page-tabs button');
+ const swipe=async(target:Locator,forward:boolean)=>{
+  const start=he?70:300,end=he?300:70;
+  await target.dispatchEvent('touchstart',{touches:[{identifier:0,clientX:forward?start:end,clientY:300}]});
+  await target.dispatchEvent('touchmove',{touches:[{identifier:0,clientX:forward?end:start,clientY:305}]});
+  await target.dispatchEvent('touchend',{touches:[],changedTouches:[{identifier:0,clientX:forward?end:start,clientY:305}]});
+ };
+ await swipe(page.locator('#tool-reading textarea'),true);
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await swipe(surface,true);
+ await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
+ await swipe(surface,false);
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await tabs.first().press(he?'ArrowLeft':'ArrowRight');
+ await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
+ await surface.dispatchEvent('wheel',{deltaX:0,deltaY:he?150:-150,shiftKey:true});
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await page.screenshot({path:`output/playwright/workspace-pages-mobile-${he?'rtl':'ltr'}.png`});
+});
+
+test('horizontal gestures stay inside the workspace and never alter browser history',async({page})=>{
+ await page.setViewportSize({width:1024,height:768});
+ await openWorkspace(page);
+ await page.route('**/api/catalog',route=>route.fulfill({json:{definitions:[],admin:false}}));
+ await page.goto('/catalog');await page.goBack();
+ await expect(page.locator('.workspace-stage')).toBeVisible();
+ await page.evaluate(()=>{
+  (window as Window&{wheelPrevented?:boolean[]}).wheelPrevented=[];
+  document.addEventListener('wheel',event=>(window as Window&{wheelPrevented?:boolean[]}).wheelPrevented!.push(event.defaultPrevented));
+ });
+ const original=page.url(),length=await page.evaluate(()=>history.length);
+ await page.locator('#tool-reading textarea').dispatchEvent('wheel',{deltaX:150,deltaY:0,cancelable:true});
+ await expect(page.locator('.page-tabs button').nth(1)).toHaveAttribute('aria-current','page');
+ await page.locator('.viewport-controls').dispatchEvent('wheel',{deltaX:-150,deltaY:0,cancelable:true});
+ expect(await page.evaluate(()=>(window as Window&{wheelPrevented?:boolean[]}).wheelPrevented)).toEqual([true,true]);
+ expect(await page.evaluate(()=>getComputedStyle(document.documentElement).overscrollBehaviorX)).toBe('none');
+ expect(page.url()).toBe(original);expect(await page.evaluate(()=>history.length)).toBe(length);
+});
+
+test('paging follows the gesture immediately and reverses without ghost cards or cooldown',async({page})=>{
+ await page.setViewportSize({width:1024,height:768});
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await openWorkspace(page);
+ const surface=page.locator('.workspace-surface'),grid=surface.locator('.r-grid'),tabs=page.locator('.page-tabs button');
+ await surface.dispatchEvent('wheel',{deltaX:16,deltaY:0});
+ await expect.poll(()=>grid.evaluate(element=>new DOMMatrix(getComputedStyle(element).transform).m41)).toBeLessThan(-1);
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await surface.dispatchEvent('wheel',{deltaX:40,deltaY:0});
+ await expect(tabs.nth(1)).toHaveAttribute('aria-current','page');
+ await expect(page.locator('.viewport-card-leaving')).toHaveCount(0);
+ await surface.dispatchEvent('wheel',{deltaX:-80,deltaY:0});
+ await expect(tabs.first()).toHaveAttribute('aria-current','page');
+ await expect(page.locator('.viewport-card-leaving')).toHaveCount(0);
+ await expect.poll(()=>grid.evaluate(element=>Math.abs(new DOMMatrix(getComputedStyle(element).transform).m41))).toBeLessThan(.1);
+ await expectBounded(page);
+});
+
+test('a page moves as one surface without crossfading or resizing its cards',async({page})=>{
+ await page.setViewportSize({width:1024,height:768});
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await openWorkspace(page);
+ await page.locator('.workspace-surface').dispatchEvent('wheel',{deltaX:80,deltaY:0});
+ const samples=await page.locator('.r-grid').evaluate(grid=>new Promise<Array<{bounds:number[][];opacity:number[]}>>(resolve=>{
+  const samples:Array<{bounds:number[][];opacity:number[]}>=[];const start=performance.now();
+  const sample=()=>{
+   const origin=grid.getBoundingClientRect();
+   const cards=[...grid.querySelectorAll<HTMLElement>(':scope > .r-card')].filter(card=>getComputedStyle(card).display!=='none');
+   samples.push({bounds:cards.map(card=>{const r=card.getBoundingClientRect();return [r.left-origin.left,r.top-origin.top,r.width,r.height]}),opacity:cards.map(card=>Number(getComputedStyle(card).opacity))});
+   if(performance.now()-start<260)requestAnimationFrame(sample);else resolve(samples);
+  };requestAnimationFrame(sample);
+ }));
+ const final=samples.at(-1)!;
+ for(const sample of samples){
+  expect(sample.bounds.length).toBe(final.bounds.length);
+  expect(sample.opacity.every(value=>value===1)).toBe(true);
+  sample.bounds.forEach((rect,index)=>rect.forEach((value,axis)=>expect(Math.abs(value-final.bounds[index][axis])).toBeLessThan(1.5)));
+ }
+});
+
+for(const [width,height,he] of [[1440,900,false],[1366,768,true],[390,844,false],[320,568,true]] as const)test(`page editor shows 16 tools without sideways scrolling at ${width}px, ${he?'RTL':'LTR'}`,async({page})=>{
+ await page.setViewportSize({width,height});
+ await openWorkspace(page,{he});
+ if(width===1440)await page.getByRole('button',{name:'Toggle color theme'}).click();
+ const before=await page.locator('.page-tabs button').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')));
+ await page.getByRole('button',{name:he?'עריכת דף':'Edit page',exact:true}).click();
+ const editor=page.getByRole('dialog');
+ await expect(editor).toBeVisible();
+ await expect(editor.getByRole('checkbox')).toHaveCount(16);
+ await expect(editor.getByRole('combobox')).toHaveCount(0);
+ expect(await editor.evaluate(element=>[element,...element.querySelectorAll('.page-editor-tools,label,.page-editor-actions')].every(node=>node.scrollWidth<=node.clientWidth+1))).toBe(true);
+ await expectInViewport(editor);
+ const close=editor.getByRole('button',{name:he?'סגירת עריכת דף':'Close page editor'});
+ await close.focus();await page.keyboard.press('Shift+Tab');
+ await expect(editor.getByRole('button',{name:he?'עדכון הדף':'Apply to page'})).toBeFocused();
+ await page.screenshot({path:`output/playwright/page-editor-grid-${width}-${he?'rtl':'ltr'}.png`});
+ await page.keyboard.press('Escape');await expect(editor).toBeHidden();
+ await expect(page.getByRole('button',{name:he?'עריכת דף':'Edit page',exact:true})).toBeFocused();
+ expect(await page.locator('.page-tabs button').evaluateAll(buttons=>buttons.map(button=>button.getAttribute('aria-label')))).toEqual(before);
 });

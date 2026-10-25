@@ -1,10 +1,12 @@
 'use client';
 
 import {useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode} from 'react';
-import {AnimatePresence, motion, useIsPresent, useReducedMotion, type HTMLMotionProps} from 'motion/react';
-import {GripVertical, MoreHorizontal, MoveDiagonal2, Maximize2, Minimize2, SlidersHorizontal, X} from 'lucide-react';
+import {createPortal} from 'react-dom';
+import {AnimatePresence, animate, motion, useMotionValue, useIsPresent, useReducedMotion, type HTMLMotionProps, type MotionStyle} from 'motion/react';
+import {GripVertical, MoreHorizontal, MoveDiagonal2, Maximize2, Minimize2, SlidersHorizontal, ChevronLeft, ChevronRight, X} from 'lucide-react';
 import type {UIComponent} from '@/lib/schema';
-import {viewportLayout, automaticLayout, columnLayout, isLessonLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
+import {viewportLayout, setViewportPageTools, parseViewportPages, automaticLayout, columnLayout, isLessonLayout, parseLayout, reconcileLayout, requestedLayout, type LayoutState} from '@/lib/workspace-layout';
+import {createPageWheelGesture, updatePageWheelGesture} from '@/lib/workspace-page-gesture';
 import {deviceDataStorage} from '@/lib/account-device-data';
 import {toolIcons, toolLabel} from './tool-metadata';
 import './viewport-workspace.css';
@@ -14,22 +16,9 @@ type Gesture = {kind:'move'|'resize';id:string;pointerId:number;x:number;y:numbe
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 
 // Keep exiting controls out of keyboard and screen-reader navigation.
-function AnimatedCard({viewportHidden=false,instant=false,...props}:HTMLMotionProps<'section'>&{viewportHidden?:boolean;instant?:boolean}){
+function AnimatedCard(props:HTMLMotionProps<'section'>){
  const present=useIsPresent();
- const element=useRef<HTMLElement>(null);
- const bounds=useRef({left:0,top:0,width:0,height:0});
- const [exited,setExited]=useState(viewportHidden);
- useLayoutEffect(()=>{
-  const card=element.current;if(!card||viewportHidden)return;
-  bounds.current={left:card.offsetLeft,top:card.offsetTop,width:card.offsetWidth,height:card.offsetHeight};
- });
- useEffect(()=>{if(!viewportHidden)setExited(false);},[viewportHidden]);
- const leaving=viewportHidden&&!instant&&!exited;
- const className=leaving?props.className?.replace('viewport-card-hidden','viewport-card-leaving'):props.className;
- return <motion.section {...props} ref={element} className={className}
-  style={leaving?{...props.style,position:'absolute',...bounds.current,gridColumn:'auto',gridRowStart:'auto',gridRowEnd:'auto',pointerEvents:'none',zIndex:2}:props.style}
-  inert={!present||props.inert} aria-hidden={!present||props.inert?true:undefined}
-  onAnimationComplete={definition=>{if(viewportHidden)setExited(true);props.onAnimationComplete?.(definition);}}/>;
+ return <motion.section {...props} inert={!present||props.inert} aria-hidden={!present||props.inert?true:undefined}/>;
 }
 
 export default function WorkspaceLayout({workspaceId,components,locale,children}:{workspaceId:string;components:UIComponent[];locale:'he'|'en';children:(component:UIComponent)=>ReactNode}) {
@@ -47,6 +36,15 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const [availableHeight,setAvailableHeight]=useState(220);
  const [measuredWorkspace,setMeasuredWorkspace]=useState<string|null>(null);
  const [motionWorkspace,setMotionWorkspace]=useState<string|null>(null);
+ const [pagePreferences,setPagePreferences]=useState<Record<string,string[][]>>({});
+ const [pageEditor,setPageEditor]=useState(false);
+ const [pageDraft,setPageDraft]=useState<string[]>([]);
+ const editorDialog=useRef<HTMLDivElement>(null);
+ const swipe=useRef<{x:number;y:number;blocked:boolean}|null>(null);
+ const wheelGesture=useRef(createPageWheelGesture());
+ const pageOffset=useMotionValue(0);
+ const pageAnimation=useRef<{stop:()=>void}|null>(null);
+ const wheelSettle=useRef<ReturnType<typeof setTimeout>|null>(null);
  const [selectedId,setSelectedId]=useState<string|null>(null);
  const [expandedId,setExpandedId]=useState<string|null>(null);
  const stage=useRef<HTMLDivElement>(null);
@@ -61,7 +59,9 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const fit=presentation==='fit';
  const initialized=saved.ready&&saved.workspaceId===workspaceId&&measuredWorkspace===workspaceId;
  const animateLayout=initialized&&motionWorkspace===workspaceId;
- const viewport=viewportLayout(components,layout.order,availableWidth,availableHeight);
+ const automaticViewport=viewportLayout(components,layout.order,availableWidth,availableHeight);
+ const pageProfile=`${automaticViewport.columns}:${Math.max(1,Math.floor((availableHeight+12)/232))}`;
+ const viewport=viewportLayout(components,layout.order,availableWidth,availableHeight,pagePreferences[pageProfile]);
  const selected=selectedId&&layout.order.includes(selectedId)?selectedId:layout.order[0];
  const expanded=expandedId&&layout.order.includes(expandedId)?expandedId:null;
  const groupIndex=Math.max(0,viewport.groups.findIndex(group=>group.ids.includes(selected)));
@@ -75,7 +75,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  const current=useRef(layout);current.current=layout;
  const composition=components.map(c=>`${c.id}:${c.type}:${c.span}`).join('|');
  // Content typing does not trigger card layout animations.
- const layoutMotionKey=`${workspaceId}:${composition}:${layout.order.join(',')}:${availableWidth}:${fit?availableHeight:0}:${presentation}:${expanded}:${groupIndex}:${density}:${JSON.stringify(layout.sizes)}`;
+ const layoutMotionKey=`${workspaceId}:${composition}:${layout.order.join(',')}:${availableWidth}:${fit?availableHeight:0}:${presentation}:${expanded}:${density}:${JSON.stringify(layout.sizes)}`;
  // Initial measurement is not a layout change to animate. Keep Motion's
  // dependency stable through initialization and arming; later edits use it normally.
  const initialGeometry=useRef(layoutMotionKey);
@@ -114,6 +114,10 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
  useLayoutEffect(()=>{
   let restored:LayoutState|null=null;
   try{const raw=deviceDataStorage().getItem(storageKey);if(raw)restored=parseLayout(JSON.parse(raw));setDensity(deviceDataStorage().getItem(`${storageKey}:density`)==='comfortable'?'comfortable':'compact');setPresentation(deviceDataStorage().getItem(`${storageKey}:presentation`)==='vertical'?'vertical':'fit');}catch{}
+  const preferences:Record<string,string[][]>={};
+  try{const raw=JSON.parse(deviceDataStorage().getItem(`${storageKey}:pages`)??'{}');if(raw&&typeof raw==='object')for(const [key,value] of Object.entries(raw)){const pages=parseViewportPages(value);if(pages&&/^\d+:\d+$/.test(key))preferences[key]=pages;}}catch{}
+  pageAnimation.current?.stop();pageOffset.set(0);wheelGesture.current=createPageWheelGesture();if(wheelSettle.current)clearTimeout(wheelSettle.current);
+  setPagePreferences(preferences);setPageEditor(false);
   setSaved({workspaceId,layout:restored??automaticLayout(components),ready:true});
   setSelectedId(null);setExpandedId(null);setPreview(null);setTarget(null);setDragging(null);setManipulating(false);gesture.current=null;setStorageWarning(false);
   // Restore once per workspace; content edits are reconciled without resetting the layout.
@@ -154,18 +158,86 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   document.addEventListener('pointerdown',closeOutside);
   return ()=>document.removeEventListener('pointerdown',closeOutside);
  },[]);
- // Keep selection in view without scrolling the page or moving editor focus.
+ // Keep the active page selector visible without moving editor focus.
  useEffect(()=>{
-  const button=stage.current?.querySelector<HTMLElement>(`[data-tool-target="${CSS.escape(expanded??selected??'')}"]`);
+  const button=stage.current?.querySelector<HTMLElement>('[data-active-page="true"]');
   if(button){const nav=button.parentElement!;const box=button.getBoundingClientRect(),bounds=nav.getBoundingClientRect();if(box.left<bounds.left||box.right>bounds.right)nav.scrollBy({left:box.left-bounds.left-(bounds.width-box.width)/2,behavior:reducedMotion?'instant':'smooth'});}
-  const active=document.activeElement;
-  if(active instanceof HTMLElement&&active.closest('.viewport-card-hidden'))button?.focus({preventScroll:true});
- },[selected,expanded,groupIndex,availableWidth,reducedMotion]);
+  if(document.activeElement instanceof HTMLElement&&document.activeElement.closest('.r-card[inert]'))button?.focus({preventScroll:true});
+ },[groupIndex,availableWidth,reducedMotion]);
+ function settlePage(from?:number){
+  pageAnimation.current?.stop();
+  if(wheelSettle.current)clearTimeout(wheelSettle.current);
+  if(reducedMotion){pageOffset.set(0);return;}
+  if(from!==undefined)pageOffset.set(from);
+  pageAnimation.current=animate(pageOffset,0,{duration:.2,ease:[.22,1,.36,1]});
+ }
+ function goPage(index:number){
+  if(index<0||index>=viewport.groups.length||index===groupIndex){settlePage();return;}
+  const direction=(index>groupIndex?1:-1)*(he?-1:1);
+  selectTool(viewport.groups[index].ids[0]);
+  settlePage(direction*28);
+ }
+ function blocksPaging(target:EventTarget|null){
+  if(!(target instanceof Element))return true;
+  if(target.closest('input,textarea,select,button,a,summary,[contenteditable=true],.card-menu,.layout-settings-panel,[role=slider]'))return true;
+  for(let node:Element|null=target;node&&node!==stage.current;node=node.parentElement){
+   if(node instanceof HTMLElement&&node.scrollWidth>node.clientWidth+2&&/auto|scroll/.test(getComputedStyle(node).overflowX))return true;
+  }
+  return false;
+ }
  useEffect(()=>{
-  if(!expanded)return;
+  const surface=stage.current;
+  if(!fit||!surface)return;
+  const wheel=(event:WheelEvent)=>{
+   const horizontal=event.deltaX||(event.shiftKey?event.deltaY:0);
+   if(event.ctrlKey||!horizontal||(!event.shiftKey&&Math.abs(event.deltaX)<=Math.abs(event.deltaY)*1.4))return;
+   // Let real horizontal scrollers consume the gesture; never chain it to history.
+   let localScroll:HTMLElement|null=null;
+   for(let node=event.target instanceof Element?event.target:null;node&&node!==surface;node=node.parentElement){if(node instanceof HTMLElement&&node.scrollWidth>node.clientWidth+2&&/auto|scroll/.test(getComputedStyle(node).overflowX)){localScroll=node;break;}}
+   event.preventDefault();
+   if(localScroll){localScroll.scrollBy({left:horizontal*(event.deltaMode===1?16:1),behavior:'instant'});return;}
+   if(expanded||pageEditor||!(event.target instanceof Element)||!event.target.closest('.workspace-surface')||event.target.closest('select,input[type=range],[role=slider]'))return;
+   const movement=updatePageWheelGesture(wheelGesture.current,horizontal*(event.deltaMode===1?16:1),performance.now());
+   if(movement.step){goPage(groupIndex+movement.step*(he?-1:1));return;}
+   if(movement.offset&&!reducedMotion){
+    pageAnimation.current?.stop();pageOffset.set(-movement.offset);
+    if(wheelSettle.current)clearTimeout(wheelSettle.current);
+    wheelSettle.current=setTimeout(()=>settlePage(),100);
+   }
+  };
+  const touchMove=(event:TouchEvent)=>{
+   const start=swipe.current;if(!start||start.blocked||event.touches.length!==1)return;
+   const touch=event.touches[0],dx=touch.clientX-start.x,dy=touch.clientY-start.y;
+   if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.7){
+    if(event.cancelable)event.preventDefault();
+    if(!reducedMotion){pageAnimation.current?.stop();pageOffset.set(clamp(dx*.45,-48,48));}
+   }
+  };
+  surface.addEventListener('wheel',wheel,{passive:false});surface.addEventListener('touchmove',touchMove,{passive:false});
+  return()=>{surface.removeEventListener('wheel',wheel);surface.removeEventListener('touchmove',touchMove);};
+ });
+ useEffect(()=>{
+  if(!expanded||pageEditor)return;
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setExpandedId(null);requestAnimationFrame(()=>expansionTrigger.current?.focus({preventScroll:true}));}};
   document.addEventListener('keydown',escape);return()=>document.removeEventListener('keydown',escape);
- },[expanded]);
+ },[expanded,pageEditor]);
+ useEffect(()=>{
+  if(!pageEditor)return;
+  const frame=requestAnimationFrame(()=>editorDialog.current?.querySelector<HTMLInputElement>('input')?.focus({preventScroll:true}));
+  const keyboard=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'){event.preventDefault();setPageEditor(false);return;}
+   if(event.key!=='Tab')return;
+   const controls=[...editorDialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')??[]];
+   const first=controls[0],last=controls.at(-1);
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  };
+  const backdrop=editorDialog.current?.parentElement;
+  const wheel=(event:WheelEvent)=>{if(!event.ctrlKey&&Math.abs(event.deltaX)>Math.abs(event.deltaY))event.preventDefault();};
+  backdrop?.addEventListener('wheel',wheel,{passive:false});
+  document.addEventListener('keydown',keyboard);
+  return()=>{cancelAnimationFrame(frame);backdrop?.removeEventListener('wheel',wheel);document.removeEventListener('keydown',keyboard);requestAnimationFrame(()=>stage.current?.querySelector<HTMLButtonElement>('.page-edit-toggle')?.focus({preventScroll:true}));};
+ },[pageEditor]);
  // Place menus against the viewport, so scrollable card bodies cannot clip them.
  function positionMenu(details:HTMLDetailsElement){
   if(!details.open)return;
@@ -179,9 +251,18 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   panel.style.maxHeight=`${window.innerHeight-24}px`;panel.style.overflowY='auto';panel.style.zIndex='60';
  }
  function changePresentation(value:'fit'|'vertical'){
+  pageAnimation.current?.stop();pageOffset.set(0);if(wheelSettle.current)clearTimeout(wheelSettle.current);
   setPresentation(value);setExpandedId(null);cancel();
   try{deviceDataStorage().setItem(`${storageKey}:presentation`,value);}catch{setStorageWarning(true);}
  }
+ function savePages(next:Record<string,string[][]>){setPagePreferences(next);try{deviceDataStorage().setItem(`${storageKey}:pages`,JSON.stringify(next));}catch{setStorageWarning(true);}}
+ function openPageEditor(){setPageDraft([...(group?.ids??[])]);setPageEditor(true);}
+ function applyPageDraft(){
+  const ids=layout.order.filter(id=>pageDraft.includes(id));if(!ids.length)return;
+  savePages({...pagePreferences,[pageProfile]:setViewportPageTools(viewport.groups.map(page=>page.ids),groupIndex,ids)});
+  setSelectedId(ids[0]);setExpandedId(null);setPageEditor(false);setAnnouncement(he?'הדף עודכן ושאר הכלים סודרו אוטומטית':'Page updated; remaining tools arranged automatically');
+ }
+ function resetPages(){const next={...pagePreferences};delete next[pageProfile];savePages(next);setAnnouncement(he?'החלוקה האוטומטית חזרה':'Automatic pages restored');}
  function selectTool(id:string){setSelectedId(id);setExpandedId(null);stage.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(menu=>{menu.open=false;});}
  function expandTool(id:string,button:HTMLButtonElement){
   if(expanded===id){setExpandedId(null);expansionTrigger.current?.focus({preventScroll:true});}
@@ -255,10 +336,12 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
   if(active.kind==='move'&&active.target&&active.target!==active.id)move(active.id,current.current.order.indexOf(active.target));
  }
  function cancel(){gesture.current=null;setPreview(null);setTarget(null);setDragging(null);setManipulating(false);}
- useEffect(()=>()=>{gesture.current=null;},[]);
+ useEffect(()=>()=>{gesture.current=null;pageAnimation.current?.stop();if(wheelSettle.current)clearTimeout(wheelSettle.current);},[]);
  const pointerHandlers={onPointerMove:update,onPointerUp:(e:PointerEvent<HTMLButtonElement>)=>finish(e),onPointerCancel:(e:PointerEvent<HTMLButtonElement>)=>finish(e,true),onLostPointerCapture:cancel,onKeyDown:(e:React.KeyboardEvent<HTMLButtonElement>)=>{if(e.key==='Escape')cancel();}};
  const byId=new Map(components.map(c=>[c.id,c]));
- return <div ref={stage} data-layout-ready={initialized} aria-busy={!initialized} inert={!initialized} style={{visibility:initialized?'visible':'hidden'}} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
+ const draftTools=layout.order.filter(id=>pageDraft.includes(id));
+ const draftFits=viewportLayout(components.filter(component=>draftTools.includes(component.id)),draftTools,availableWidth,availableHeight).groups[0]?.ids.length??0;
+ return <div ref={stage} data-layout-ready={initialized} aria-busy={!initialized} inert={!initialized||pageEditor} style={{visibility:initialized?'visible':'hidden'}} data-presentation={presentation} className={`workspace-stage${fit?' viewport-fit':''}${reading&&!fit?' lesson-layout':''}${density==='compact'?' layout-compact':''}`} dir={he?'rtl':'ltr'}>
   <div className="viewport-controls">
 
   {<div className="layout-toolbar"><details className="layout-settings" onToggle={event=>positionMenu(event.currentTarget)} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}><summary><SlidersHorizontal size={17} aria-hidden="true"/><span className="layout-trigger-label">{he?'תצוגה':'Display'}</span><span>{fit?(he?'התאמה למסך':'Fit to screen'):layout.mode==='auto'?(he?'אנכית · אוטומטי':'Vertical · Automatic'):(he?'אנכית · מותאם אישית':'Vertical · Custom')}</span></summary><div className="layout-settings-panel">
@@ -270,16 +353,35 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
    <span className="layout-field-label">{he?'מרווחים בין התכנים':'Content spacing'}</span><div className="layout-density" role="group" aria-label={he?'צפיפות':'Density'}>{(['compact','comfortable'] as const).map(value=><button type="button" key={value} aria-pressed={density===value} onClick={()=>changeDensity(value)}>{value==='compact'?(he?'צפוף':'Compact'):(he?'מרווח':'Comfortable')}</button>)}</div>
   </div></details></div>}
   </div>
-  {fit&&components.length>0&&<div className="viewport-navigation"><nav className="viewport-tool-nav" aria-label={he?'כלי סביבת העבודה':'Workspace tools'}>{layout.order.map(id=>{const c=byId.get(id);if(!c)return null;const Icon=toolIcons[c.type];return <button type="button" key={id} data-tool-target={id} aria-controls={`tool-${id}`} aria-pressed={visibleIds.has(id)} onClick={()=>selectTool(id)}><Icon size={14} aria-hidden="true"/><span>{c.title}</span></button>;})}</nav>{viewport.groups.length>1&&<span className="viewport-group-count" aria-live="polite">{he?'קבוצה':'Group'} {groupIndex+1} / {viewport.groups.length}</span>}</div>}
+  {fit&&components.length>0&&<div className="viewport-navigation page-navigation">
+   <button type="button" className="page-arrow" aria-label={he?'הדף הקודם':'Previous page'} disabled={groupIndex===0} onClick={()=>goPage(groupIndex-1)}>{he?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
+   <nav className="viewport-tool-nav page-tabs" onKeyDown={event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();const next=groupIndex+(event.key==='ArrowRight'?1:-1)*(he?-1:1);goPage(next);requestAnimationFrame(()=>stage.current?.querySelector<HTMLButtonElement>('[data-active-page="true"]')?.focus({preventScroll:true}));}} aria-label={he?'דפי סביבת העבודה':'Workspace pages'}>{viewport.groups.map((page,index)=>{
+    const titles=page.ids.map(id=>byId.get(id)?.title??'');
+    const summary=titles.slice(0,2).join(' · ')+(titles.length>2?` +${titles.length-2}`:'');
+    return <button type="button" key={page.ids.join(':')} data-page-tools={page.ids.join(' ')} data-active-page={groupIndex===index} aria-current={groupIndex===index?'page':undefined} aria-label={`${he?'דף':'Page'} ${index+1}: ${titles.join(', ')}`} title={titles.join(' · ')} onClick={()=>goPage(index)}>
+     {groupIndex===index&&<motion.i className="page-active-indicator" layoutId={`active-page-${workspaceId}`} transition={{duration:reducedMotion?0:.24,ease:[.22,1,.36,1]}}/>}<b>{index+1}</b><span>{summary}</span>
+    </button>;
+   })}</nav>
+   <button type="button" className="page-arrow" aria-label={he?'הדף הבא':'Next page'} disabled={groupIndex===viewport.groups.length-1} onClick={()=>goPage(groupIndex+1)}>{he?<ChevronLeft size={17}/>:<ChevronRight size={17}/>}</button>
+   <button type="button" className="page-edit-toggle" aria-label={he?'עריכת דף':'Edit page'} aria-expanded={pageEditor} onClick={openPageEditor}><SlidersHorizontal size={15}/><span>{he?'עריכת דף':'Edit page'}</span></button>
+  </div>}
+  {typeof document!=='undefined'&&createPortal(<AnimatePresence initial={false}>{fit&&pageEditor&&<motion.div className="page-editor-backdrop" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:reducedMotion?0:.16}} onPointerDown={event=>{if(event.target===event.currentTarget)setPageEditor(false);}}>
+   <motion.div ref={editorDialog} className="page-editor" role="dialog" aria-modal="true" aria-labelledby={`page-editor-title-${workspaceId}`} aria-describedby={`page-editor-help-${workspaceId}`} dir={he?'rtl':'ltr'} initial={reducedMotion?false:{y:8,scale:.985}} animate={{y:0,scale:1}} exit={reducedMotion?{}:{y:4,scale:.99}} transition={{duration:reducedMotion?0:.18,ease:[.22,1,.36,1]}}>
+    <header className="page-editor-heading"><div><h2 id={`page-editor-title-${workspaceId}`}>{he?`הכלים בדף ${groupIndex+1}`:`Tools on page ${groupIndex+1}`}</h2><p id={`page-editor-help-${workspaceId}`}>{he?'בחרו את הכלים שחשובים כאן. היתר מסתדרים לבד.':'Choose the tools you want here. The rest arrange themselves.'}</p></div><button type="button" aria-label={he?'סגירת עריכת דף':'Close page editor'} onClick={()=>setPageEditor(false)}><X size={18}/></button></header>
+    <div className="page-editor-tools">{layout.order.map(id=>{const component=byId.get(id);if(!component)return null;const Icon=toolIcons[component.type];const page=viewport.groups.findIndex(page=>page.ids.includes(id));return <label key={id} className={pageDraft.includes(id)?'is-selected':''} title={component.title}><input type="checkbox" aria-label={component.title} checked={pageDraft.includes(id)} onChange={event=>setPageDraft(previous=>event.target.checked?[...previous,id]:previous.filter(item=>item!==id))}/><Icon size={17} aria-hidden="true"/><span className="page-tool-copy"><strong>{component.title}</strong><small>{page===groupIndex?(he?'בדף הזה':'On this page'):`${he?'בדף':'On page'} ${page+1}`}</small></span></label>;})}</div>
+    <p className="page-editor-capacity" role="status">{!draftTools.length?(he?'בחרו לפחות כלי אחד.':'Choose at least one tool.'):draftFits===draftTools.length?(he?`${draftTools.length} כלים · מתאימים למסך הזה`:`${draftTools.length} tools · fit this screen`):(he?`${draftFits} כלים כאן · היתר ימשיכו אוטומטית לדפים הבאים`:`${draftFits} tools here · the rest continue automatically on following pages`)}</p>
+    <footer className="page-editor-actions"><button type="button" className="page-reset" onClick={()=>{resetPages();setPageEditor(false);}}>{he?'חזרה לאוטומטי':'Reset to automatic'}</button><button type="button" className="page-apply" disabled={!draftTools.length} onClick={applyPageDraft}>{he?'עדכון הדף':'Apply to page'}</button></footer>
+   </motion.div>
+  </motion.div>}</AnimatePresence>,stage.current?.closest('.shell')??document.body)}
 
   {announcement&&<p className={fit?"layout-feedback sr-only":"layout-feedback"} role="status">{announcement}</p>}
   {storageWarning&&<p className="r-feedback r-small" role="status">{he?'לא ניתן לשמור את הסידור בדפדפן הזה. הוא יישמר כל עוד העמוד פתוח.':'This browser could not save the layout. It will last while this page stays open.'}</p>}
-  <div className="workspace-surface"><div className={`r-grid${fit?' viewport-grid':!flowing&&components.every(c=>rowSpans[c.id])?' masonry-ready':''}`} style={fit?{'--viewport-columns':expanded?1:viewport.columns,'--viewport-rows':expanded?1:group?.rows??1} as CSSProperties:undefined} ref={grid}><AnimatePresence initial={false}>{layout.order.map((id,index)=>{
+  <div className="workspace-surface" onTouchStart={event=>{const touch=event.touches[0];swipe.current=event.touches.length===1&&!expanded?{x:touch.clientX,y:touch.clientY,blocked:blocksPaging(event.target)}:null;}} onTouchEnd={event=>{const start=swipe.current;swipe.current=null;if(!start||start.blocked||!fit||gesture.current)return;const touch=event.changedTouches[0],dx=touch.clientX-start.x,dy=touch.clientY-start.y;if(Math.abs(dx)>48&&Math.abs(dx)>Math.abs(dy)*1.7)goPage(groupIndex+(dx<0?1:-1)*(he?-1:1));else settlePage();}} onTouchCancel={()=>{swipe.current=null;settlePage();}}><motion.div className={`r-grid${fit?' viewport-grid':!flowing&&components.every(c=>rowSpans[c.id])?' masonry-ready':''}`} style={fit?{x:pageOffset,'--viewport-columns':expanded?1:viewport.columns,'--viewport-rows':expanded?1:group?.rows??1} as MotionStyle:undefined} ref={grid}><AnimatePresence initial={false}>{layout.order.map((id,index)=>{
    const c=byId.get(id);if(!c)return null;
    const hidden=fit&&!visibleIds.has(id);
    const placement=group?.placements[id];
    const Icon=toolIcons[c.type];const size=preview?.id===id?preview.size:layout.sizes[id];
-   return <AnimatedCard key={id} viewportHidden={hidden} instant={!animateLayout||!!reducedMotion} inert={hidden} layout={hidden||reducedMotion||manipulating||dragging?false:true} layoutDependency={motionDependency} initial={false} animate={{opacity:hidden?0:1,y:0}} exit={reducedMotion?{opacity:1}:{opacity:0}} transition={{layout:{type:'spring',duration:!animateLayout||reducedMotion?0:0.38,bounce:0.05},opacity:{duration:!animateLayout||reducedMotion?0:0.2},y:{duration:!animateLayout||reducedMotion?0:0.2}}} onFocusCapture={()=>{if(fit&&!hidden)setSelectedId(id);}} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${hidden?' viewport-card-hidden':''}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridColumn:fit?(expanded||group?.ids.length===1?'1 / -1':placement?`${placement.column} / span ${placement.span}`:undefined):undefined,gridRowStart:fit?(expanded?'1':placement?String(placement.row):undefined):undefined,gridRowEnd:fit?'span 1':!flowing&&rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
+   return <AnimatedCard key={id} inert={hidden} layout={hidden||reducedMotion||manipulating||dragging?false:true} layoutDependency={motionDependency} initial={false} animate={{opacity:1,y:0}} exit={reducedMotion?{opacity:1}:{opacity:0}} transition={{layout:{type:'spring',duration:!animateLayout||reducedMotion?0:0.38,bounce:0.05},opacity:{duration:fit||!animateLayout||reducedMotion?0:0.2},y:{duration:!animateLayout||reducedMotion?0:0.2}}} onFocusCapture={()=>{if(fit&&!hidden)setSelectedId(id);}} id={`tool-${id}`} data-component-id={id} aria-label={c.title} className={`r-card tool-${c.type}${hidden?' viewport-card-hidden':''}${target===id&&dragging!==id?' is-drag-target':''}${dragging===id?' is-dragging':''}`} style={{'--card-columns':Math.max(availableWidth<680?12:availableWidth<1050?6:4,size.columns),'--card-min-height':`${size.minHeight}px`,gridColumn:fit?(expanded||group?.ids.length===1?'1 / -1':placement?`${placement.column} / span ${placement.span}`:undefined):undefined,gridRowStart:fit?(expanded?'1':placement?String(placement.row):undefined):undefined,gridRowEnd:fit?'span 1':!flowing&&rowSpans[id]?`span ${rowSpans[id]}`:undefined} as CSSProperties}>
     <header className="r-card-header"><div className="r-card-mark"><Icon size={18} aria-hidden="true"/></div><h3>{c.title}</h3><div className="card-controls">{fit&&<button type="button" className="viewport-expand" aria-label={`${expanded===id?(he?'החזרת':'Restore'):(he?'הרחבת':'Expand')} ${c.title}`} aria-expanded={expanded===id} onClick={event=>expandTool(id,event.currentTarget)}>{expanded===id?<Minimize2 size={16}/>:<Maximize2 size={16}/>}</button>}<button className="drag-handle" type="button" aria-label={`${he?'הזזת':'Move'} ${c.title}`} title={he?'גרירה לשינוי מיקום':'Drag to move'} aria-keyshortcuts="ArrowUp ArrowDown Home End" onPointerDown={event=>begin(event,id,'move')} {...pointerHandlers} onKeyDown={event=>{
       if(event.key==='Escape'){cancel();return;}
       const position=event.key==='ArrowUp'?index-1:event.key==='ArrowDown'?index+1:event.key==='Home'?0:event.key==='End'?layout.order.length-1:null;
@@ -290,7 +392,7 @@ export default function WorkspaceLayout({workspaceId,components,locale,children}
      <button className="desktop-layout-control" type="button" disabled={size.minHeight>=900} onClick={()=>resize(id,{...size,minHeight:Math.max(size.minHeight,Array.from(grid.current?.children??[]).find(card=>(card as HTMLElement).dataset.componentId===id)?.getBoundingClientRect().height??0)+80})}>{he?'הגדלת גובה':'Taller'}</button><button className="desktop-layout-control" type="button" disabled={size.minHeight<=160} onClick={()=>resize(id,{...size,minHeight:size.minHeight-80})}>{he?'הקטנת גובה':'Shorter'}</button>
     </div></details></div></header><div className="r-card-content" tabIndex={fit&&!hidden?0:undefined} role={fit?"region":undefined} aria-label={fit?c.title:undefined}>{children(c)}</div><button className="resize-handle desktop-layout-control" type="button" aria-label={`${he?'שינוי גודל':'Resize'} ${c.title}`} title={`${he?'שינוי גודל':'Resize'} · ${toolLabel(c.type,locale)}`} onPointerDown={event=>begin(event,id,'resize')} {...pointerHandlers}><MoveDiagonal2 size={15}/></button>
    </AnimatedCard>;
-  })}</AnimatePresence></div>{!components.length&&<p className="workspace-empty" role="status">{he?'אין כרגע כלים זמינים להצגה. אפשר לעדכן את הבקשה למטה.':'No tools are currently available. Update your request below.'}</p>}</div>
+  })}</AnimatePresence></motion.div>{!components.length&&<p className="workspace-empty" role="status">{he?'אין כרגע כלים זמינים להצגה. אפשר לעדכן את הבקשה למטה.':'No tools are currently available. Update your request below.'}</p>}</div>
 
  </div>;
 }

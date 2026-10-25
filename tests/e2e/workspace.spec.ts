@@ -27,7 +27,7 @@ test('intent creates interactive persisted workspace; constraint patches retain 
 test('unfamiliar goal, mobile, MCP discovery and invocation',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');
  await submit(page,'Organize a neighborhood seed exchange');
- await page.locator('.viewport-tool-nav').getByRole('button',{name:'Working data',exact:true}).click();
+ await page.locator('.viewport-tool-nav').getByRole('button',{name:/Working data/}).click();
  await expect(page.getByRole('heading',{name:'Working data'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
  await page.goto('/mcp-host');await page.getByRole('button',{name:/Run discovery/}).click();
