@@ -139,6 +139,8 @@ useEffect(()=>{
    else
    setError(rtl?'השיחה לא נמצאה בחשבון או במכשיר הזה.':'This conversation was not found in this account or device.');
   }
+  // A bare home URL starts at home, regardless of the saved selection.
+  else if(active!==null){setActive(null);return;}
  }
  const target=active?`/conversations/${encodeURIComponent(active)}`:'/';
  if(window.location.pathname+window.location.search!==target)window.history.replaceState(null,'',target);
