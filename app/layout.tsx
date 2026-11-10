@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import BootScreen from '@/components/BootScreen';
 import './home-motion.css';
+import './studio.css';
 
 const deploymentHost = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? (deploymentHost ? `https://${deploymentHost}` : 'http://localhost:3000');

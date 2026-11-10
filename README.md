@@ -14,13 +14,21 @@ See [current verification and limits](docs/adaptive-workspace-verification.md).
 
 GitHub Actions runs unit, production build, TypeScript, Chromium browser and Firebase emulator checks on every push and pull request. See the [Hebrew CI guide](docs/ci.md) for results, local commands and required merge checks.
 
+## The studio experience
+
+The home screen uses an editorial split composition, warm charcoal or paper surfaces, mint/peach/lilac accents, and geometric illustrations made with CSS and SVG. Shared palette tokens carry through to the workspace without changing saved tool layouts. No remote images or font downloads are required.
+
+Try the four-tab interactive preview: toggle sample learning steps, inspect a sample week or route, and select a decision option. Arrow keys, Home and End navigate the tabs, including RTL. **Make it mine** starts a real workspace through the existing planner using the selected example. Preview interactions are temporary and do not edit saved work or transfer into the new workspace. The preview is explicitly labeled; sample scores are illustrative.
+
+Up to three recent workspaces appear in a **Continue your work** section, opening their actual saved content. On narrow screens, the goal input comes before the preview. Short screens scroll with readable text. Focus rings and reduced-motion support remain available.
+
 ## Finding and recovering your work
 
 The home screen, starting cards and workspace navigation follow the saved Hebrew/RTL or English/LTR preference. Search recent workspaces by title or goal; filtering does not change saved content. The light/dark preference survives reloads and synchronizes across tabs on this origin.
 
 Deleting a workspace offers **Undo deletion**, restoring its tools, conversation, draft and position in the list. Only the latest deletion is recoverable, until the notification is dismissed, the page is reloaded or the account changes. On mobile, deleting closes the navigation drawer so recovery is immediately available. This recovery is separate from undoing a workspace edit.
 
-![Hebrew desktop home with workspace search](docs/images/home-he-desktop.png)
+![Hebrew studio home with interactive preview and workspace search](docs/images/home-he-desktop.png)
 
 <details>
 <summary>Hebrew mobile home</summary>
@@ -29,7 +37,7 @@ Deleting a workspace offers **Undo deletion**, restoring its tools, conversation
 
 </details>
 
-Verified locally on November 10, 2026: TypeScript, production build, 289 passing unit tests (5 skipped), and 3 existing language/history browser tests. Additional isolated browser checks covered search by goal, no results, delete/restore with notes and conversation retained after reload, theme persistence, and mobile recovery without horizontal overflow or JavaScript errors. Screenshots use synthetic workspace data. These checks do not verify hosted deployment or live account synchronization.
+Verified locally on November 10, 2026: TypeScript, production build, 289 passing unit tests (5 skipped), and 8 existing browser tests covering language/history, home entry and desktop/mobile workspaces. Additional isolated browser checks covered the new home at 1440, 1024, 768, 390 and 320px in both languages, preview keyboard navigation and interactions, creating an actual workspace from the preview through the local simulation API, and resuming saved notes without data loss or JavaScript errors. The earlier search, deletion recovery and theme checks also passed. Screenshots use synthetic workspace data. These checks do not verify hosted deployment or live account synchronization.
 
 ## Task-aware catalog
 
