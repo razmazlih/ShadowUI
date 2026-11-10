@@ -32,7 +32,10 @@ test('review APIs deny unauthenticated listing and mutation before database acce
  assert.equal((await listing.GET(new Request('http://localhost/api/admin/components'))).status,403);
  assert.equal((await mutation.POST(new Request('http://localhost/api/admin/components/review_a',{method:'POST'}),{params:Promise.resolve({id:'review_a'})})).status,403);
 });
-test('sanitization parameterizes private constants while retaining formula operators and substitution semantics',async()=>{
+test('sanitization parameterizes private constants while retaining formula operators and substitution semantics',async context=>{
+ // Whole-candidate privacy checks must not match a coincidental timestamp such
+ // as 07:53:50.170Z, which also contains the private token "0.17".
+ context.mock.timers.enable({apis:['Date'],now:Date.parse('2026-01-01T00:00:00.000Z')});
  const {evaluateCustomTool}=await import('../lib/custom-tool');
  const definition=source();definition.template.custom!.fields=[{id:'privateNeeded',label:'Private needed',type:'number',value:'700',options:[],min:null,max:null},{id:'privateAvailable',label:'Private available',type:'number',value:'100',options:[],min:null,max:null}];definition.template.custom!.outputs=[{id:'privateShortage',label:'Private shortage',expression:['privateNeeded','privateAvailable','-','0','max'],unit:''},{id:'privateTax',label:'Private tax',expression:['privateNeeded','0.17','*'],unit:''}];
  const sanitized=createReviewCandidate(definition).definition.template.custom!;
@@ -60,7 +63,8 @@ test('verified administrator alone can list and approve reviews through API',{sk
   assert.equal((await POST(request(reader,body),context)).status,403);const response=await POST(request(admin,body),context);assert.equal(response.status,200);assert.equal((await response.json()).candidate.status,'approved');
  }finally{if(allowlist===undefined)delete process.env.FIREBASE_ADMIN_EMAIL;else process.env.FIREBASE_ADMIN_EMAIL=allowlist;}
 });
-test('repeated private literals reuse one synthetic parameter and structural constants remain',()=>{
+test('repeated private literals reuse one synthetic parameter and structural constants remain',context=>{
+ context.mock.timers.enable({apis:['Date'],now:Date.parse('2026-01-01T00:00:00.000Z')});
  const definition=source();definition.template.custom!.outputs=[{id:'result',label:'Private',expression:['quantity','0.17','*','unitValue','0.17','*','+','-1','max'],unit:''}];
  const candidate=createReviewCandidate(definition),tool=candidate.definition.template.custom!;
  assert.equal(tool.fields.filter(field=>field.id.startsWith('parameter_')).length,1);assert.equal(tool.outputs[0].expression.filter(token=>token==='parameter_1').length,2);assert.ok(tool.outputs[0].expression.includes('-1'));assert.equal(JSON.stringify(candidate).includes('0.17'),false);assert.equal(definition.template.custom!.outputs[0].expression[1],'0.17');
