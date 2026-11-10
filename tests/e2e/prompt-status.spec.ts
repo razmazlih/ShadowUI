@@ -12,9 +12,9 @@ test('prompt shows pending, completion and failure beside the input',async({page
   return route.fulfill({json:{...planDemo('Help me study biology'),explanation:'Created your study plan.'}});
  });
  await page.goto('/');
- const input=page.getByLabel('What do you want to accomplish?');
+ const input=page.getByRole('textbox',{name:/^(What do you want to accomplish\?|מה תרצו להשיג\?)$/});
  await input.fill('Help me study biology');
- await page.getByRole('button',{name:'Build workspace'}).click();
+ await page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/}).click();
  await expect(page.locator('#request-status')).toContainText('Understanding your request');
  await expect(input).toBeDisabled();
  await expect.poll(()=>posts).toBe(1);
@@ -32,7 +32,7 @@ test('prompt shows pending, completion and failure beside the input',async({page
  if(await launcher.isVisible())await launcher.click();
  const before=await guestWorkspaces(page);
  await input.fill('אני רוצה שתסדר לי את המסך');
- await page.getByRole('button',{name:'Build workspace'}).click();
+ await page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/}).click();
  await expect(page.locator('#request-status')).toContainText('סידרתי את הרכיבים');
  const id=before[0].id;
  await expect.poll(()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)??'{}').mode,`shadowui.layout.v1:${id}`)).toBe('fixed');
@@ -42,7 +42,7 @@ test('prompt shows pending, completion and failure beside the input',async({page
  await expect(page.locator('#request-status')).toHaveCount(0);
  fail=true;
  await input.fill('עזור לי ללמוד');
- await page.getByRole('button',{name:'Build workspace'}).click();
+ await page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/}).click();
  await expect(page.locator('.assistant-activity')).toContainText('מבין את הבקשה');
  await expect.poll(()=>posts).toBe(2);
  finish();
@@ -66,7 +66,7 @@ test('response notices and errors belong only to their conversation',async({page
  });
  await page.goto('/?conversation=alpha');
  const feedback=page.locator('#request-status');
- const input=page.getByLabel('What do you want to accomplish?');
+ const input=page.getByRole('textbox',{name:/^(What do you want to accomplish\?|מה תרצו להשיג\?)$/});
  const openAssistant=async()=>{
   const launcher=page.getByRole('button',{name:'Open assistant',exact:true});
   // Each conversation mounts its own minimized assistant after the scene transition.
@@ -81,7 +81,7 @@ test('response notices and errors belong only to their conversation',async({page
  };
  const send=async(prompt:string)=>{
   await input.fill(prompt);
-  await page.getByRole('button',{name:'Build workspace'}).click();
+  await page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/}).click();
  };
  await expect(page.getByRole('textbox',{name:'Alpha notes',exact:true})).toBeVisible();
  await openAssistant();
@@ -118,9 +118,9 @@ test('response notices and errors belong only to their conversation',async({page
  await expect.poll(()=>deferredStarted).toBe(true);
  await select('Beta');
  await expect(feedback).toContainText('Request failed');
- await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/})).toBeDisabled();
  finishDeferred();
- await expect(page.getByRole('button',{name:'Build workspace'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/})).toBeEnabled();
  await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
  await expect(feedback).toContainText('Request failed');
  await expect(feedback).not.toContainText('Deferred Alpha');

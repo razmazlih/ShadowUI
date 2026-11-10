@@ -7,7 +7,7 @@ test('budget metadata stays out of the interface while replies work at 320px RTL
   posts++;return route.fulfill({json:{operation:'reply',intent:'conversation',explanation:'Mocked reply without any provider call',mode:'live',budget:{spent:.6,limit:1,warning:false}}});
  });
  await page.goto('/');await page.getByRole('button',{name:'Toggle language direction'}).click();
- await page.getByLabel('What do you want to accomplish?').fill('שלום');await page.getByRole('button',{name:'Build workspace'}).click();
+ await page.getByRole('textbox',{name:/^(What do you want to accomplish\?|מה תרצו להשיג\?)$/}).fill('שלום');await page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/}).click();
  await expect(page.locator('#request-status')).toContainText('Mocked reply without any provider call');expect(posts).toBe(1);
  await expect(page.locator('.home-usage,.ai-usage')).toHaveCount(0);await expect(page.getByText('$0.6000',{exact:true})).toHaveCount(0);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -20,7 +20,7 @@ test('unavailable budget storage blocks requests without displaying invented usa
   posts++;return route.abort();
  });
  await page.goto('/');await page.getByRole('button',{name:'Toggle language direction'}).click();
- await page.getByLabel('What do you want to accomplish?').fill('שלום');await expect(page.getByRole('button',{name:'Build workspace'})).toBeDisabled();
- await page.getByLabel('What do you want to accomplish?').press('Enter');await expect(page.locator('.error[role=alert]')).toContainText('אינו זמין');expect(posts).toBe(0);
+ await page.getByRole('textbox',{name:/^(What do you want to accomplish\?|מה תרצו להשיג\?)$/}).fill('שלום');await expect(page.getByRole('button',{name:/^(Build workspace|בניית סביבת עבודה)$/})).toBeDisabled();
+ await page.getByRole('textbox',{name:/^(What do you want to accomplish\?|מה תרצו להשיג\?)$/}).press('Enter');await expect(page.locator('.error[role=alert]')).toContainText('אינו זמין');expect(posts).toBe(0);
  await expect(page.locator('.home-usage,.ai-usage')).toHaveCount(0);await expect(page.getByText('$0.0000',{exact:true})).toHaveCount(0);
 });

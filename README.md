@@ -37,7 +37,7 @@ Deleting a workspace offers **Undo deletion**, restoring its tools, conversation
 
 </details>
 
-Verified locally on November 10, 2026: TypeScript, production build, 289 passing unit tests (5 skipped), and 8 existing browser tests covering language/history, home entry and desktop/mobile workspaces. Additional isolated browser checks covered the new home at 1440, 1024, 768, 390 and 320px in both languages, preview keyboard navigation and interactions, creating an actual workspace from the preview through the local simulation API, and resuming saved notes without data loss or JavaScript errors. The earlier search, deletion recovery and theme checks also passed. Screenshots use synthetic workspace data. These checks do not verify hosted deployment or live account synchronization.
+Verified locally on November 10, 2026: TypeScript, production build, 288 passing unit tests (5 skipped) in the committed tree, and 38 browser regression checks covering localized prompt controls, request feedback, desktop/mobile workspaces and recorded layout transitions. The earlier 8 language/history, home-entry and workspace checks also passed. Additional isolated browser checks covered the new home at 1440, 1024, 768, 390 and 320px in both languages, preview keyboard navigation and interactions, creating an actual workspace from the preview through the local simulation API, and resuming saved notes without data loss or JavaScript errors. The earlier search, deletion recovery and theme checks also passed. Screenshots use synthetic workspace data. These checks do not verify hosted deployment or live account synchronization.
 
 ## Task-aware catalog
 

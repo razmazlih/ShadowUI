@@ -60,13 +60,23 @@ async function expectInViewport(locator:Locator){
 async function switchWithHeightSamples(page:Page,mode:'fit'|'vertical'){
  const settings=await openDisplay(page);
  const reading=page.locator('#tool-reading');
- const before=await reading.evaluate(element=>element.getBoundingClientRect().height);
- await settings.getByRole('button',{name:mode==='fit'?'Fit to screen':'Vertical view',exact:true}).click();
- const heights=await reading.evaluate(element=>new Promise<number[]>(resolve=>{
-  const values:number[]=[];const start=performance.now();
-  function sample(){values.push(element.getBoundingClientRect().height);if(performance.now()-start<700)requestAnimationFrame(sample);else resolve(values);}sample();
- }));
- const after=heights.at(-1)!;
+ const toggle=settings.getByRole('button',{name:mode==='fit'?'Fit to screen':'Vertical view',exact:true});
+ // Capture on the actual click, before React changes layout. Starting after
+ // await click() can miss the entire transition under CI/video-recording load.
+ await toggle.evaluate(button=>{
+  const card=document.getElementById('tool-reading') as HTMLElement&{heightSamples?:Promise<number[]>};
+  card.heightSamples=new Promise<number[]>(resolve=>{
+   button.addEventListener('click',()=>{
+    const values:number[]=[];const start=performance.now();
+    function sample(){values.push(card.getBoundingClientRect().height);if(performance.now()-start<700)requestAnimationFrame(sample);else resolve(values);}
+    sample();
+   },{capture:true,once:true});
+  });
+ });
+ await toggle.click();
+ const heights=await reading.evaluate(element=>(element as HTMLElement&{heightSamples:Promise<number[]>}).heightSamples);
+ await reading.evaluate(element=>{delete (element as HTMLElement&{heightSamples?:Promise<number[]>}).heightSamples;});
+ const before=heights[0],after=heights.at(-1)!;
  expect(Math.abs(after-before)).toBeGreaterThan(20);
  const lower=Math.min(before,after)+2,upper=Math.max(before,after)-2;
  expect(heights.some(height=>height>lower&&height<upper),'height changes through intermediate bounds').toBe(true);
