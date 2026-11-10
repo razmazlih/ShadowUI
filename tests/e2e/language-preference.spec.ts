@@ -14,7 +14,7 @@ test('language selection survives conversation changes, new chats and reloads',a
  await page.goto('/');
  const shell=page.locator('.shell');
  const language=page.getByRole('button',{name:'Toggle language direction'});
- const input=page.getByLabel('What do you want to accomplish?');
+ const input=page.locator('#goal');
  const openChat=(title:string)=>page.locator('.workspace-history-open').filter({hasText:title}).click();
  await expect(page.locator('.workspace-history-open')).toHaveCount(2);
  if(await shell.getAttribute('lang')!=='he')await language.click();
@@ -22,7 +22,7 @@ test('language selection survives conversation changes, new chats and reloads',a
  await openChat('שיחה בעברית');
  await openChat('English conversation');
  await expect(shell).toHaveAttribute('lang','he');
- await page.getByRole('button',{name:/New workspace/}).click();
+ await page.getByRole('button',{name:/New workspace|סביבה חדשה/}).click();
  await input.fill('An English request must not switch the interface');
  await expect(input).toHaveAttribute('placeholder','מה תרצו להשיג?');
  await expect(shell).toHaveAttribute('dir','rtl');
@@ -33,7 +33,7 @@ test('language selection survives conversation changes, new chats and reloads',a
  await expect(shell).toHaveAttribute('lang','en');
  await openChat('שיחה בעברית');
  await expect(shell).toHaveAttribute('dir','ltr');
- await page.getByRole('button',{name:/New workspace/}).click();
+ await page.getByRole('button',{name:/New workspace|סביבה חדשה/}).click();
  await input.fill('בקשה בעברית אינה משנה את שפת הממשק');
  await expect(input).toHaveAttribute('placeholder','What do you want to accomplish?');
  await page.reload();
