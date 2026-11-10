@@ -14,6 +14,23 @@ See [current verification and limits](docs/adaptive-workspace-verification.md).
 
 GitHub Actions runs unit, production build, TypeScript, Chromium browser and Firebase emulator checks on every push and pull request. See the [Hebrew CI guide](docs/ci.md) for results, local commands and required merge checks.
 
+## Finding and recovering your work
+
+The home screen, starting cards and workspace navigation follow the saved Hebrew/RTL or English/LTR preference. Search recent workspaces by title or goal; filtering does not change saved content. The light/dark preference survives reloads and synchronizes across tabs on this origin.
+
+Deleting a workspace offers **Undo deletion**, restoring its tools, conversation, draft and position in the list. Only the latest deletion is recoverable, until the notification is dismissed, the page is reloaded or the account changes. On mobile, deleting closes the navigation drawer so recovery is immediately available. This recovery is separate from undoing a workspace edit.
+
+![Hebrew desktop home with workspace search](docs/images/home-he-desktop.png)
+
+<details>
+<summary>Hebrew mobile home</summary>
+
+<img src="docs/images/home-he-mobile.png" alt="Hebrew mobile home" width="390" />
+
+</details>
+
+Verified locally on November 10, 2026: TypeScript, production build, 289 passing unit tests (5 skipped), and 3 existing language/history browser tests. Additional isolated browser checks covered search by goal, no results, delete/restore with notes and conversation retained after reload, theme persistence, and mobile recovery without horizontal overflow or JavaScript errors. Screenshots use synthetic workspace data. These checks do not verify hosted deployment or live account synchronization.
+
 ## Task-aware catalog
 
 The task pipeline now builds a validated task contract, selects capability-compatible components from Firestore, composes typed local data bindings, and can generate private validated calculators when no catalog formula fits. Visit `/catalog` for browsing, interactive previews and authenticated version management. Instance edits stay in this browser; catalog definitions persist in Firebase. See [configuration, behavior and limitations](docs/component-catalog.md).

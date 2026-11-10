@@ -186,3 +186,17 @@ textarea[dir=auto],input[dir=auto]{text-align:start}
 .breadcrumb strong,.workspace-history-open bdi,.nav-item{white-space:normal;overflow-wrap:anywhere;text-overflow:clip;overflow:visible}
 .demo-history-item>span{display:block;-webkit-line-clamp:unset;overflow:visible;overflow-wrap:anywhere}
 header:has(.breadcrumb){height:auto;min-height:60px;padding-block:14px}
+
+/* Local workspace discovery and recoverable deletion. */
+.workspace-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;color:var(--muted);flex-shrink:0}
+.workspace-search:focus-within{border-color:var(--accent)}
+.workspace-search input{width:100%;min-width:0;border:0;background:none;color:var(--text);font-size:11px;outline:none;min-height:24px}
+.workspace-search input::placeholder{color:var(--muted)}
+.workspace-search>svg{flex-shrink:0}
+.workspace-links{min-height:0}
+.deletion-notice{position:absolute;z-index:20;bottom:56px;inset-inline:20px;margin-inline:auto;max-width:640px;display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--accent);border-radius:12px;box-shadow:0 8px 28px #0003;font-size:12px}
+.deletion-notice>span{flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.5}
+.deletion-notice>button:not(.icon-button){display:flex;align-items:center;gap:6px;border:0;border-radius:6px;background:var(--soft);color:var(--text);padding:9px;white-space:nowrap}
+.shell[dir=rtl] .intro-tag,.shell[dir=rtl] .suggestion-label,.shell[dir=rtl] .example-tag,.shell[dir=rtl] .nav-section{letter-spacing:0}
+.shell[dir=rtl] .welcome h1{letter-spacing:-.5px;line-height:1.2}
+@media(max-width:700px){.deletion-notice{inset-inline:12px;gap:8px;padding:10px;font-size:11px}.header-actions{flex-shrink:0}}
